@@ -1,14 +1,15 @@
-package com.factfeed.backend.controller;
+package com.factfeed.backend.article;
 
-import com.factfeed.backend.dto.ArticleDTO;
-import com.factfeed.backend.dto.ScrapingResultDTO;
-import com.factfeed.backend.entity.Article;
-import com.factfeed.backend.model.NewsSource;
-import com.factfeed.backend.service.ArticleService;
+import com.factfeed.backend.model.dto.ArticleDTO;
+import com.factfeed.backend.model.dto.ScrapingResultDTO;
+import com.factfeed.backend.model.entity.Article;
+import com.factfeed.backend.model.enums.NewsSource;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.Max;
 import jakarta.validation.constraints.Min;
 import jakarta.validation.constraints.NotNull;
+import java.util.List;
+import java.util.Map;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.data.domain.Page;
@@ -18,10 +19,13 @@ import org.springframework.data.domain.Sort;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.validation.annotation.Validated;
-import org.springframework.web.bind.annotation.*;
-
-import java.util.List;
-import java.util.Map;
+import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PathVariable;
+import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.RequestBody;
+import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RequestParam;
+import org.springframework.web.bind.annotation.RestController;
 
 @RestController
 @RequestMapping("/api/articles")
@@ -96,11 +100,6 @@ public class ArticleController {
     public ResponseEntity<?> submitSingleArticle(@Valid @RequestBody @NotNull ArticleDTO articleDTO) {
         try {
             // Validate input
-            if (articleDTO.getSiteName() == null || articleDTO.getSiteName().trim().isEmpty()) {
-                return ResponseEntity.badRequest()
-                        .body(Map.of("error", "Site name is required"));
-            }
-
             if (articleDTO.getTitle() == null || articleDTO.getTitle().trim().isEmpty()) {
                 return ResponseEntity.badRequest()
                         .body(Map.of("error", "Article title is required"));
@@ -111,12 +110,9 @@ public class ArticleController {
                         .body(Map.of("error", "Article URL is required"));
             }
 
-            log.info("Received single article from {}", articleDTO.getSiteName());
-
             // Process as a single-article scraping result
             ScrapingResultDTO singleResult = new ScrapingResultDTO();
             singleResult.setArticles(List.of(articleDTO));
-            singleResult.setSiteName(articleDTO.getSiteName());
             singleResult.setTotalRequested(1);
             singleResult.setTotalFound(1);
             singleResult.setTotalValid(1);

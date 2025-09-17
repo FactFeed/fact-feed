@@ -25,6 +25,8 @@ repositories {
 }
 
 dependencies {
+    implementation("org.jsoup:jsoup:1.21.2")
+    implementation("org.yaml:snakeyaml:2.0")
     implementation("org.springframework.boot:spring-boot-starter-data-jpa")
     implementation("org.springframework.boot:spring-boot-starter-data-rest")
     implementation("org.springframework.boot:spring-boot-starter-web")
