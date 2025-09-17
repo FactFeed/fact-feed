@@ -56,7 +56,11 @@ public class ArticleExtractorService {
                     break;
                 } catch (IOException ex) {
                     if (i == attempts - 1) throw ex;
-                    try { Thread.sleep((long) (scrapingConfig.getDefaultDelay() * 1000L * (i + 1))); } catch (InterruptedException ignored) {}
+                    try {
+                        Thread.sleep((long) (scrapingConfig.getDefaultDelay() * 1000L * (i + 1)));
+                    } catch (InterruptedException ignored) {
+                        Thread.currentThread().interrupt();
+                    }
                 }
             }
             if (doc == null) return null;
@@ -276,14 +280,15 @@ public class ArticleExtractorService {
      * Extract specific field from JSON-LD node
      */
     private String extractFieldFromJsonNode(JsonNode node, String fieldType) {
-        // Only process Article/NewsArticle types, skip BreadcrumbList etc.
+        // Only process allowed JSON-LD @type values (configurable), skip BreadcrumbList etc.
         JsonNode typeNode = node.get("@type");
         if (typeNode == null) {
             return null;
         }
 
         String nodeType = typeNode.asText();
-        if (!nodeType.equals("Article") && !nodeType.equals("NewsArticle")) {
+        if (scrapingConfig.getAllowedJsonLdTypes() == null ||
+                scrapingConfig.getAllowedJsonLdTypes().stream().noneMatch(t -> t.equalsIgnoreCase(nodeType))) {
             return null;
         }
 

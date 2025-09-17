@@ -16,9 +16,9 @@ public class ScrapingConfig {
     private double defaultDelay = 1.0;
     private int defaultMaxRetries = 3;
     private int defaultTimeout = 30;
-        // Enable limited concurrency per source when extracting articles
-        private boolean parallelPerSourceEnabled = true;
-        private int maxConcurrentPerSource = 3;
+    // Enable limited concurrency per source when extracting articles
+    private boolean parallelPerSourceEnabled = true;
+    private int maxConcurrentPerSource = 3;
 
     // Default headers for HTTP requests
     private Map<String, String> defaultHeaders = Map.of(
@@ -30,10 +30,16 @@ public class ScrapingConfig {
 
     // URL patterns to exclude
     private List<String> excludedUrlPatterns = Arrays.asList(
-            "javascript:", "mailto:", "#",
+            // Schemes and fragments
+            "javascript:", "mailto:", "tel:", "#",
+            // Social and external domains
             "facebook.com", "twitter.com", "youtube.com", "instagram.com",
             "whatsapp.com", "telegram.org", "linkedin.com",
-            "/search", "/category", "/tag", "/author",
+            // Site navigational paths
+            "/search", "/category", "/tag", "/author", "/topics", "/topic/",
+            "/world-news", "/entertainment", "/unicode-to-bijoy-converter",
+            // File extensions and common non-article markers
+            ".pdf", ".jpg", ".jpeg", ".png", ".gif", ".svg",
             "share", "print", "pdf", "email"
     );
 
@@ -41,5 +47,10 @@ public class ScrapingConfig {
     private List<String> excludedImagePatterns = Arrays.asList(
             "logo", "icon", "avatar", "profile", "banner", "advertisement",
             "ads", "social", "share", "button", "thumbnail_small"
+    );
+
+    // Allowed JSON-LD @type values for article parsing
+    private List<String> allowedJsonLdTypes = Arrays.asList(
+            "Article", "NewsArticle"
     );
 }

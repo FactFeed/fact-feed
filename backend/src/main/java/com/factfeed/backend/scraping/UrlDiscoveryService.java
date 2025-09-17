@@ -206,15 +206,9 @@ public class UrlDiscoveryService {
     private boolean isLikelyArticleUrl(String url) {
         String lowerUrl = url.toLowerCase();
 
-        // Exclude common non-article patterns
-        String[] excludePatterns = {
-                "/entertainment", "/topic/", "/unicode-to-bijoy-converter",
-                "/world-news", "/category", "/tag", "/author", "/search",
-                "javascript:", "mailto:", "#", ".pdf", ".jpg", ".png", ".gif"
-        };
-
-        for (String pattern : excludePatterns) {
-            if (lowerUrl.contains(pattern)) {
+        // Exclude common non-article patterns from config
+        for (String pattern : scrapingConfig.getExcludedUrlPatterns()) {
+            if (lowerUrl.contains(pattern.toLowerCase())) {
                 return false;
             }
         }

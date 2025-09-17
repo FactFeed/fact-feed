@@ -24,6 +24,19 @@ import org.springframework.transaction.annotation.Transactional;
 @Transactional
 public class ArticleService {
 
+    // Reusable date formatters to avoid repeated allocations
+    private static final List<DateTimeFormatter> DATE_FORMATTERS = Arrays.asList(
+            DateTimeFormatter.ISO_LOCAL_DATE_TIME,
+            DateTimeFormatter.ISO_OFFSET_DATE_TIME,
+            DateTimeFormatter.ISO_ZONED_DATE_TIME,
+            DateTimeFormatter.ofPattern("yyyy-MM-dd'T'HH:mm:ssXXX"),
+            DateTimeFormatter.ofPattern("yyyy-MM-dd'T'HH:mm:ss.SSSXXX"),
+            DateTimeFormatter.ofPattern("yyyy-MM-dd'T'HH:mm:ss"),
+            DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss"),
+            DateTimeFormatter.ofPattern("dd/MM/yyyy HH:mm:ss"),
+            DateTimeFormatter.ofPattern("MM/dd/yyyy HH:mm:ss"),
+            DateTimeFormatter.ofPattern("yyyy-MM-dd")
+    );
     private final ArticleRepository articleRepository;
 
     public List<Article> processScrapingResult(ScrapingResultDTO scrapingResult) {
@@ -181,21 +194,7 @@ public class ArticleService {
 
         String cleanDateStr = dateStr.trim();
 
-        // List of common date formats
-        List<DateTimeFormatter> formatters = Arrays.asList(
-                DateTimeFormatter.ISO_LOCAL_DATE_TIME,
-                DateTimeFormatter.ISO_OFFSET_DATE_TIME,
-                DateTimeFormatter.ISO_ZONED_DATE_TIME,
-                DateTimeFormatter.ofPattern("yyyy-MM-dd'T'HH:mm:ssXXX"),
-                DateTimeFormatter.ofPattern("yyyy-MM-dd'T'HH:mm:ss.SSSXXX"),
-                DateTimeFormatter.ofPattern("yyyy-MM-dd'T'HH:mm:ss"),
-                DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss"),
-                DateTimeFormatter.ofPattern("dd/MM/yyyy HH:mm:ss"),
-                DateTimeFormatter.ofPattern("MM/dd/yyyy HH:mm:ss"),
-                DateTimeFormatter.ofPattern("yyyy-MM-dd")
-        );
-
-        for (DateTimeFormatter formatter : formatters) {
+        for (DateTimeFormatter formatter : DATE_FORMATTERS) {
             try {
                 // Try parsing as ZonedDateTime first (for offset formats)
                 if (cleanDateStr.contains("+") || cleanDateStr.contains("Z")) {
