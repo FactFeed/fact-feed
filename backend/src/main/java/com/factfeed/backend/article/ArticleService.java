@@ -99,19 +99,35 @@ public class ArticleService {
         article.setContent(articleDTO.getContent().trim());
         article.setUrl(cleanUrl);
         article.setAuthor(articleDTO.getAuthor() != null ? articleDTO.getAuthor().trim() : null);
+        article.setAuthorLocation(articleDTO.getAuthorLocation() != null ? articleDTO.getAuthorLocation().trim() : null);
         article.setImageUrl(articleDTO.getImageUrl() != null ? articleDTO.getImageUrl().trim() : null);
+        article.setImageCaption(articleDTO.getImageCaption() != null ? articleDTO.getImageCaption().trim() : null);
         article.setSource(source);
         article.setCategory(articleDTO.getCategory() != null ? articleDTO.getCategory().trim() : null);
+        article.setTags(articleDTO.getTags() != null ? articleDTO.getTags().trim() : null);
+
+        // Calculate word count from content
         article.setWordCount(countWords(articleDTO.getContent()));
-        article.setScrapedAt(LocalDateTime.now());
+
+        // scrapedAt and dbUpdatedAt are handled by JPA annotations
 
         // Parse published date with error handling
         try {
-            LocalDateTime publishedDate = articleDTO.getParsedPublishedDate();
-            article.setPublishedDate(publishedDate != null ? publishedDate : LocalDateTime.now());
+            LocalDateTime publishedDate = LocalDateTime.parse(articleDTO.getPublishedAt());
+            article.setPublishedAt(publishedDate);
         } catch (Exception e) {
             log.warn("Error parsing published date for article {}: {}", cleanUrl, e.getMessage());
-            article.setPublishedDate(LocalDateTime.now());
+            article.setPublishedAt(LocalDateTime.now());
+        }
+
+        // Parse update date if available
+        if (articleDTO.getUpdatedAt() != null && !articleDTO.getUpdatedAt().trim().isEmpty()) {
+            try {
+                LocalDateTime updateDate = LocalDateTime.parse(articleDTO.getUpdatedAt());
+                article.setUpdatedAt(updateDate);
+            } catch (Exception e) {
+                log.debug("Could not parse update date for article {}: {}", cleanUrl, e.getMessage());
+            }
         }
 
         return article;
@@ -121,7 +137,8 @@ public class ArticleService {
         if (siteName != null && !siteName.trim().isEmpty()) {
             String normalized = normalizeSourceKey(siteName);
             for (NewsSource ns : NewsSource.values()) {
-                if (ns.name().equalsIgnoreCase(normalized)) {
+                if (ns.name().equalsIgnoreCase(normalized) ||
+                        ns.getSiteName().equalsIgnoreCase(siteName)) {
                     return ns;
                 }
             }
@@ -141,9 +158,12 @@ public class ArticleService {
 
     private NewsSource parseFromUrl(String url) {
         if (url == null) return null;
-        String u = url.toLowerCase();
-        if (u.contains("prothomalo.com")) return NewsSource.PROTHOMALO;
-        if (u.contains("ittefaq.com.bd")) return NewsSource.ITTEFAQ;
+
+        for (NewsSource source : NewsSource.values()) {
+            if (source.matchesUrl(url)) {
+                return source;
+            }
+        }
         return null;
     }
 

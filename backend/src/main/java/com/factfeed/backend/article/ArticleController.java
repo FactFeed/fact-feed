@@ -100,11 +100,6 @@ public class ArticleController {
     public ResponseEntity<?> submitSingleArticle(@Valid @RequestBody @NotNull ArticleDTO articleDTO) {
         try {
             // Validate input
-            if (articleDTO.getSiteName() == null || articleDTO.getSiteName().trim().isEmpty()) {
-                return ResponseEntity.badRequest()
-                        .body(Map.of("error", "Site name is required"));
-            }
-
             if (articleDTO.getTitle() == null || articleDTO.getTitle().trim().isEmpty()) {
                 return ResponseEntity.badRequest()
                         .body(Map.of("error", "Article title is required"));
@@ -115,12 +110,9 @@ public class ArticleController {
                         .body(Map.of("error", "Article URL is required"));
             }
 
-            log.info("Received single article from {}", articleDTO.getSiteName());
-
             // Process as a single-article scraping result
             ScrapingResultDTO singleResult = new ScrapingResultDTO();
             singleResult.setArticles(List.of(articleDTO));
-            singleResult.setSiteName(articleDTO.getSiteName());
             singleResult.setTotalRequested(1);
             singleResult.setTotalFound(1);
             singleResult.setTotalValid(1);

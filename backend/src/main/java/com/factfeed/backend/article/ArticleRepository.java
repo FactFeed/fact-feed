@@ -21,7 +21,7 @@ public interface ArticleRepository extends JpaRepository<Article, Long> {
 
     Page<Article> findByCategory(String category, Pageable pageable);
 
-    @Query("SELECT a FROM Article a WHERE a.publishedDate >= :fromDate AND a.publishedDate IS NOT NULL ORDER BY a.publishedDate DESC")
+    @Query("SELECT a FROM Article a WHERE a.publishedAt >= :fromDate AND a.publishedAt IS NOT NULL ORDER BY a.publishedAt DESC")
     Page<Article> findRecentArticles(@Param("fromDate") LocalDateTime fromDate, Pageable pageable);
 
     @Query("SELECT a FROM Article a " +
