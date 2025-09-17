@@ -45,7 +45,7 @@ public class Article {
     @Column(columnDefinition = "TEXT")
     private String imageUrl;
 
-    @Column(length = 200)
+    @Column(length = 500)
     private String imageCaption;
 
     @Column(nullable = false, columnDefinition = "TEXT")
@@ -54,7 +54,7 @@ public class Article {
     @Column(length = 50)
     private String category;
 
-    @Column(length = 100)
+    @Column(length = 500)
     private String tags;
 
     @Enumerated(EnumType.STRING)

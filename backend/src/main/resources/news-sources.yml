@@ -1,0 +1,232 @@
+# This file configures the web scraper for different news sources.
+# For each news source, selectors are listed in order of priority from HIGHEST to LOWEST.
+# The scraper will try each selector in order until it finds a match.
+# Stricter, more specific selectors should be placed first.
+sources:
+  prothomAlo:
+    name: Prothom Alo
+    baseUrl: https://www.prothomalo.com/
+    # Title selectors: Strict to Lax priority (based on actual HTML analysis)
+    # NOTE: When using JSON-LD, target the block where @type is Article/NewsArticle (ignore BreadcrumbList etc.)
+    titleSelectors:
+      - "script[type='application/ld+json']" # JSON-LD structured data (extract "headline")
+      - "h1" # Visible headline
+      - "meta[property='og:title']" # Open Graph meta
+      - "meta[name='twitter:title']" # Twitter title
+      - "meta[name='title']" # Generic meta title
+      - "title" # Page title fallback
+
+    # Author selectors: Strict to Lax priority (verified in all samples)
+    authorSelectors:
+      - "script[type='application/ld+json']" # JSON-LD author (extract author[0].name or author[0].givenName)
+      - "meta[name='author']" # Meta author tag (present in all samples)
+      - "meta[property='article:author']" # Article author meta (fallback)
+      - ".byline" # Byline fallback (not found in samples)
+
+    # Author location selectors
+    authorLocationSelectors:
+      - ".author-location"
+      - ".contributor-location"
+      - ".reporter-location"
+
+    # Date/Time selectors: Strict to Lax priority
+    publishedTimeSelectors:
+      - "script[type='application/ld+json']" # JSON-LD date (extract "datePublished")
+      - "meta[property='article:published_time']" # Article meta
+      - ".date-published" # Alternative date class
+
+    # Update date selectors
+    updatedTimeSelectors:
+      - "script[type='application/ld+json']" # JSON-LD modified (extract "dateModified")
+      - "meta[property='article:modified_time']" # Article modified meta
+      - "meta[property='og:updated_time']" # Open Graph updated time (fallback)
+      - ".last-modified" # Last modified class
+
+    # Image selectors: Strict to Lax priority
+    imageSelectors:
+      - "meta[property='og:image']" # Open Graph image (most reliable)
+      - "meta[property='og:image:secure_url']" # Secure URL variant
+      - "meta[name='twitter:image']" # Twitter card image
+      - "script[type='application/ld+json']" # JSON-LD image (fallback; sometimes null)
+
+    # Image caption selectors
+    imageCaptionSelectors:
+      - ".story-element-image-caption"
+      - ".story-element-caption-attribution-wrapper"
+      - "figcaption"
+      - ".image-caption"
+      - ".photo-caption"
+      - ".caption"
+
+    # Content selectors: Strict to Lax priority
+    # NOTE: For JSON-LD, use Article/NewsArticle.articleBody (HTML-escaped). Unescape entities before splitting into paragraphs.
+    contentSelectors:
+      - "script[type='application/ld+json']" # JSON-LD content (extract "articleBody")
+      - ".story-element-text" # Prothom Alo specific
+      - ".story-content" # Additional container
+      - ".story-element" # Story elements
+      - ".article-content" # Generic article content
+      - ".entry-content" # Entry content
+      - ".content-body" # Content body
+      - "article p" # Paragraphs in article
+      - ".story-content p" # Story content paragraphs
+      - "main p" # Main content paragraphs
+
+    # Content ignore selectors - elements to skip
+    contentIgnoreSelectors:
+      - ".reference-link"
+      - ".story-element-text-also-read"
+      - ".story-element-caption-attribution-wrapper"
+      - ".advertisement"
+      - ".ads"
+      - ".social-share"
+      - ".related-articles"
+      - ".comments"
+      - ".newsletter-signup"
+      - "script"
+      - "style"
+      - "noscript"
+
+    # Category selectors
+    categorySelectors:
+      - "script[type='application/ld+json']" # JSON-LD section (extract "articleSection")
+      - "meta[property='article:section']" # Article section meta
+      - ".print-entity-section-wrapper a" # Visible section link
+      - ".breadcrumb" # Breadcrumb navigation
+      - ".category" # Category class
+      - ".section" # Section class
+
+    # Keywords/Tags selectors
+    keywordSelectors:
+      - "script[type='application/ld+json']" # JSON-LD keywords (extract "keywords")
+      - "meta[name='keywords']" # Meta keywords (present in all samples)
+      - "meta[name='news_keywords']" # News keywords (present in all samples)
+      - "meta[property='article:tag']" # Some pages expose each tag as article:tag
+      - ".tags" # Tags container
+      - ".keywords" # Keywords container
+      - ".article-tags" # Article tags
+
+    # Categories to scrape
+    categories:
+      - "/bangladesh"
+      - "/politics"
+      - "/world"
+      - "/business"
+      - "/opinion"
+      - "/sports"
+      - "/entertainment"
+      - "/chakri"
+      - "/lifestyle"
+      - "/technology"
+
+    # Categories to ignore during scraping
+    categoriesToIgnore:
+      - "/photo"
+      - "/video"
+      - "/live"
+      - "/podcast"
+      - "/gallery"
+  dailyIttefaq:
+    name: Daily Ittefaq
+    baseUrl: https://www.ittefaq.com.bd/
+    # Title selectors for Ittefaq
+    titleSelectors:
+      - ".content_detail_left .detail h1" # Visible H1 in detail area
+      - "h1" # Fallback headline
+      - "meta[property='og:title']"
+      - "meta[name='twitter:title']"
+      - "title"
+
+    # Author selectors for Ittefaq
+    authorSelectors:
+      - "script[type='application/ld+json']" # JSON-LD author.name
+      - ".author"
+      - ".byline"
+      - "meta[name='author']"
+
+    # Author location selectors
+    authorLocationSelectors:
+      - ".author-location"
+      - ".location"
+
+    # Date/Time selectors for Ittefaq
+    publishedTimeSelectors:
+      - "script[type='application/ld+json']" # JSON-LD datePublished
+      - "meta[property='article:published_time']"
+      - "time[datetime]"
+      - "time[dateTime]"
+      - ".publish-date"
+      - ".date"
+
+    # Update date selectors
+    updatedTimeSelectors:
+      - "script[type='application/ld+json']" # JSON-LD dateModified
+      - "meta[property='article:modified_time']"
+      - ".update-date"
+      - ".modified"
+
+    # Image selectors for Ittefaq
+    imageSelectors:
+      - "script[type='application/ld+json']" # JSON-LD image.url
+      - "meta[property='og:image']"
+      - "meta[name='twitter:image']"
+      - ".content_detail_left .detail img"
+      - ".article-image img"
+      - ".featured-image img"
+      - "img[width][height]"
+
+    # Image caption selectors
+    imageCaptionSelectors:
+      - "figcaption"
+      - ".image-caption"
+      - ".caption"
+
+    # Content selectors for Ittefaq
+    contentSelectors:
+      - "script[type='application/ld+json']" # JSON-LD articleBody
+      - ".content_detail_left .detail p" # Main content paragraphs in detail area
+      - ".article-content p"
+      - ".content p"
+      - ".story-content p"
+      - "article p"
+      - "main p"
+
+    # Content ignore selectors
+    contentIgnoreSelectors:
+      - ".advertisement"
+      - ".ads"
+      - ".social-share"
+      - ".related"
+      - ".comments"
+      - "script"
+      - "style"
+      - "noscript"
+
+    # Category selectors
+    categorySelectors:
+      - "script[type='application/ld+json']" # JSON-LD articleSection
+      - "meta[property='article:section']"
+      - ".secondary_header .secondary_logo span" # Visible category
+      - ".breadcrumb"
+      - ".category"
+
+    # Keywords/Tags selectors
+    keywordSelectors:
+      - "meta[name='keywords']"
+      - "meta[name='news_keywords']"
+      - ".tags"
+
+    # Categories to scrape
+    categories:
+      - "/country"
+      - "/politics"
+      - "/international"
+      - "/economy"
+      - "/sports"
+      - "/entertainment"
+      - "/technology"
+
+    # Categories to ignore
+    categoriesToIgnore:
+      - "/photo"
+      - "/video"

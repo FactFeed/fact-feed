@@ -3,6 +3,7 @@ package com.factfeed.backend.article;
 import com.factfeed.backend.model.entity.Article;
 import com.factfeed.backend.model.enums.NewsSource;
 import java.time.LocalDateTime;
+import java.util.List;
 import java.util.Optional;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
@@ -16,6 +17,9 @@ public interface ArticleRepository extends JpaRepository<Article, Long> {
     Optional<Article> findByUrl(String url);
 
     boolean existsByUrl(String url);
+
+    @Query("SELECT a.url FROM Article a WHERE a.url IN :urls")
+    List<String> findExistingUrls(@Param("urls") List<String> urls);
 
     Page<Article> findBySource(NewsSource source, Pageable pageable);
 
