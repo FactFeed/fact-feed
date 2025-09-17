@@ -229,7 +229,7 @@ public class UrlDiscoveryService {
         boolean endsWithBadPattern = lowerUrl.endsWith("/") ||
                 lowerUrl.endsWith(".html#") ||
                 lowerUrl.endsWith(".php") ||
-                lowerUrl.contains("#");
+                lowerUrl.endsWith("#");
 
         return (hasDatePattern || hasArticleId || hasArticleKeyword || hasSubstantialPath) && !endsWithBadPattern;
     }

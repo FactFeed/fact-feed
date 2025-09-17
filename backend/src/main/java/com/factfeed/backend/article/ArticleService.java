@@ -158,30 +158,47 @@ public class ArticleService {
 
         // scrapedAt and dbUpdatedAt are handled by JPA annotations
 
-        // Parse published date with error handling
-        try {
-            if (articleDTO.getPublishedAt() != null && !articleDTO.getPublishedAt().trim().isEmpty()) {
-                LocalDateTime publishedDate = parseDateTime(articleDTO.getPublishedAt());
-                article.setPublishedAt(publishedDate);
-            } else {
-                article.setPublishedAt(LocalDateTime.now());
-            }
-        } catch (Exception e) {
-            log.warn("Error parsing published date for article {}: {}", cleanUrl, e.getMessage());
-            article.setPublishedAt(LocalDateTime.now());
-        }
-
-        // Parse update date if available
-        if (articleDTO.getUpdatedAt() != null && !articleDTO.getUpdatedAt().trim().isEmpty()) {
-            try {
-                LocalDateTime updateDate = parseDateTime(articleDTO.getUpdatedAt());
-                article.setUpdatedAt(updateDate);
-            } catch (Exception e) {
-                log.debug("Could not parse update date for article {}: {}", cleanUrl, e.getMessage());
-            }
-        }
+        // Parse and set date fields
+        parseAndSetDate(articleDTO, article, "publishedAt", cleanUrl, LocalDateTime.now(), true);
+        parseAndSetDate(articleDTO, article, "updatedAt", cleanUrl, null, false);
 
         return article;
+    }
+
+    /**
+     * Helper to parse and set date fields to reduce duplication.
+     */
+    private void parseAndSetDate(ArticleDTO dto, Article article, String fieldName, String cleanUrl, LocalDateTime defaultValue, boolean warnOnError) {
+        String dateStr = null;
+        if ("publishedAt".equals(fieldName)) {
+            dateStr = dto.getPublishedAt();
+        } else if ("updatedAt".equals(fieldName)) {
+            dateStr = dto.getUpdatedAt();
+        }
+
+        if (dateStr != null && !dateStr.trim().isEmpty()) {
+            try {
+                LocalDateTime parsedDate = parseDateTime(dateStr);
+                if ("publishedAt".equals(fieldName)) {
+                    article.setPublishedAt(parsedDate);
+                } else {
+                    article.setUpdatedAt(parsedDate);
+                }
+            } catch (Exception e) {
+                if (warnOnError) {
+                    log.warn("Error parsing {} date for article {}: {}", fieldName, cleanUrl, e.getMessage());
+                    if ("publishedAt".equals(fieldName) && defaultValue != null) {
+                        article.setPublishedAt(defaultValue);
+                    }
+                } else {
+                    log.debug("Could not parse {} date for article {}: {}", fieldName, cleanUrl, e.getMessage());
+                }
+            }
+        } else {
+            if ("publishedAt".equals(fieldName) && defaultValue != null) {
+                article.setPublishedAt(defaultValue);
+            }
+        }
     }
 
     /**

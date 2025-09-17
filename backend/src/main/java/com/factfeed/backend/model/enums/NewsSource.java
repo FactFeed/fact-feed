@@ -59,6 +59,13 @@ public enum NewsSource {
      * Get the source name in lowercase for YAML key matching
      */
     public String getYamlKey() {
-        return this.name().toLowerCase().replace("_", "");
+        switch (this) {
+            case PROTHOMALO:
+                return "prothomalo";
+            case ITTEFAQ:
+                return "dailyittefaq";
+            default:
+                return this.name().toLowerCase().replace("_", "");
+        }
     }
 }

@@ -7,7 +7,9 @@ import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import java.io.IOException;
 import java.util.List;
+import java.util.Set;
 import java.util.regex.Pattern;
+import java.util.stream.Collectors;
 import lombok.extern.slf4j.Slf4j;
 import org.jsoup.Jsoup;
 import org.jsoup.nodes.Document;
@@ -25,10 +27,17 @@ public class ArticleExtractorService {
     private final ScrapingConfig scrapingConfig;
     private final ObjectMapper objectMapper;
     private final Pattern jsonLdPattern = Pattern.compile("\\{.*?\\}", Pattern.DOTALL);
+    private final Set<String> allowedJsonLdTypesLowercase;
 
     public ArticleExtractorService(ScrapingConfig scrapingConfig) {
         this.scrapingConfig = scrapingConfig;
         this.objectMapper = new ObjectMapper();
+        // Pre-compute lowercase set for O(1) lookup
+        this.allowedJsonLdTypesLowercase = scrapingConfig.getAllowedJsonLdTypes() != null
+                ? scrapingConfig.getAllowedJsonLdTypes().stream()
+                .map(String::toLowerCase)
+                .collect(Collectors.toSet())
+                : Set.of();
     }
 
     /**
@@ -287,8 +296,8 @@ public class ArticleExtractorService {
         }
 
         String nodeType = typeNode.asText();
-        if (scrapingConfig.getAllowedJsonLdTypes() == null ||
-                scrapingConfig.getAllowedJsonLdTypes().stream().noneMatch(t -> t.equalsIgnoreCase(nodeType))) {
+        if (allowedJsonLdTypesLowercase.isEmpty() ||
+                !allowedJsonLdTypesLowercase.contains(nodeType.toLowerCase())) {
             return null;
         }
 

@@ -78,17 +78,20 @@ public class NewsSourceConfigService {
     }
 
     /**
-     * Map YAML key to NewsSource enum
+     * Map YAML key to NewsSource enum using dynamic lookup
      */
     private NewsSource mapYamlKeyToNewsSource(String yamlKey) {
-        switch (yamlKey.toLowerCase()) {
-            case "prothomalo":
-                return NewsSource.PROTHOMALO;
-            case "dailyittefaq":
-                return NewsSource.ITTEFAQ;
-            default:
-                return null;
+        if (yamlKey == null) {
+            return null;
         }
+
+        String normalizedKey = yamlKey.toLowerCase();
+        for (NewsSource source : NewsSource.values()) {
+            if (source.getYamlKey().equals(normalizedKey)) {
+                return source;
+            }
+        }
+        return null;
     }
 
     /**
