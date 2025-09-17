@@ -1,5 +1,6 @@
 package com.factfeed.backend.article;
 
+import com.factfeed.backend.model.dto.ArticleLightDTO;
 import com.factfeed.backend.model.entity.Article;
 import com.factfeed.backend.model.enums.NewsSource;
 import java.time.LocalDateTime;
@@ -27,6 +28,16 @@ public interface ArticleRepository extends JpaRepository<Article, Long> {
 
     @Query("SELECT a FROM Article a WHERE a.publishedAt >= :fromDate AND a.publishedAt IS NOT NULL ORDER BY a.publishedAt DESC")
     Page<Article> findRecentArticles(@Param("fromDate") LocalDateTime fromDate, Pageable pageable);
+
+    @Query("SELECT new com.factfeed.backend.model.dto.ArticleLightDTO(a.id, a.title, a.content) " +
+           "FROM Article a WHERE a.publishedAt >= :fromDate AND a.publishedAt IS NOT NULL " +
+           "ORDER BY a.publishedAt DESC")
+    List<ArticleLightDTO> findRecentArticlesLight(@Param("fromDate") LocalDateTime fromDate);
+
+    @Query("SELECT new com.factfeed.backend.model.dto.ArticleLightDTO(a.id, a.title, a.content) " +
+           "FROM Article a WHERE a.summarizedContent IS NULL AND a.content IS NOT NULL " +
+           "ORDER BY a.scrapedAt DESC")
+    List<ArticleLightDTO> findUnsummarizedArticles(Pageable pageable);
 
     @Query("SELECT a FROM Article a " +
             "WHERE (LOWER(a.title) LIKE LOWER(CONCAT('%', TRIM(:keyword), '%')) " +

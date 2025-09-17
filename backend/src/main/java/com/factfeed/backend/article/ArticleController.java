@@ -52,7 +52,9 @@ public class ArticleController {
      * Endpoint for Python scraper to submit scraped articles
      */
     @PostMapping("/submit")
-    public ResponseEntity<?> submitScrapingResult(@Valid @RequestBody @NotNull ScrapingResultDTO scrapingResult) {
+    public ResponseEntity<?> submitScrapingResult(
+            @Valid @RequestBody @NotNull ScrapingResultDTO scrapingResult,
+            @RequestParam(defaultValue = "true") boolean enableAI) {
         try {
             // Validate input
             if (scrapingResult.getArticles() == null || scrapingResult.getArticles().isEmpty()) {
@@ -71,16 +73,17 @@ public class ArticleController {
                         .body(Map.of("error", "Maximum 100 articles per batch allowed"));
             }
 
-            log.info("Received scraping result from {} with {} articles",
-                    scrapingResult.getSiteName(), scrapingResult.getArticles().size());
+            log.info("Received scraping result from {} with {} articles (AI: {})",
+                    scrapingResult.getSiteName(), scrapingResult.getArticles().size(), enableAI);
 
-            List<Article> savedArticles = articleService.processScrapingResult(scrapingResult);
+            List<Article> savedArticles = articleService.processScrapingResult(scrapingResult, enableAI);
 
             return ResponseEntity.ok(Map.of(
                     "message", "Articles processed successfully",
                     "savedCount", savedArticles.size(),
                     "totalReceived", scrapingResult.getArticles().size(),
-                    "source", scrapingResult.getSiteName()
+                    "source", scrapingResult.getSiteName(),
+                    "aiSummarization", enableAI
             ));
         } catch (IllegalArgumentException e) {
             log.warn("Invalid input for scraping result: {}", e.getMessage());
@@ -97,7 +100,9 @@ public class ArticleController {
      * Endpoint for Python scraper to submit a single article
      */
     @PostMapping("/submit-single")
-    public ResponseEntity<?> submitSingleArticle(@Valid @RequestBody @NotNull ArticleDTO articleDTO) {
+    public ResponseEntity<?> submitSingleArticle(
+            @Valid @RequestBody @NotNull ArticleDTO articleDTO,
+            @RequestParam(defaultValue = "true") boolean enableAI) {
         try {
             // Validate input
             if (articleDTO.getTitle() == null || articleDTO.getTitle().trim().isEmpty()) {
@@ -117,13 +122,15 @@ public class ArticleController {
             singleResult.setTotalFound(1);
             singleResult.setTotalValid(1);
 
-            List<Article> savedArticles = articleService.processScrapingResult(singleResult);
+            List<Article> savedArticles = articleService.processScrapingResult(singleResult, enableAI);
 
             if (!savedArticles.isEmpty()) {
                 return ResponseEntity.ok(Map.of(
                         "message", "Article saved successfully",
                         "articleId", savedArticles.get(0).getId(),
-                        "url", savedArticles.get(0).getUrl()
+                        "url", savedArticles.get(0).getUrl(),
+                        "aiSummarization", enableAI,
+                        "hasSummary", savedArticles.get(0).getSummarizedContent() != null
                 ));
             } else {
                 return ResponseEntity.ok(Map.of(
