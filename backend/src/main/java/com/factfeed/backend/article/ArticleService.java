@@ -1,21 +1,19 @@
-package com.factfeed.backend.service;
+package com.factfeed.backend.article;
 
-import com.factfeed.backend.dto.ArticleDTO;
-import com.factfeed.backend.dto.ScrapingResultDTO;
-import com.factfeed.backend.entity.Article;
-import com.factfeed.backend.model.NewsSource;
-import com.factfeed.backend.repository.ArticleRepository;
+import com.factfeed.backend.model.dto.ArticleDTO;
+import com.factfeed.backend.model.dto.ScrapingResultDTO;
+import com.factfeed.backend.model.entity.Article;
+import com.factfeed.backend.model.enums.NewsSource;
+import java.time.LocalDateTime;
+import java.util.ArrayList;
+import java.util.List;
+import java.util.Optional;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
-
-import java.time.LocalDateTime;
-import java.util.ArrayList;
-import java.util.List;
-import java.util.Optional;
 
 @Service
 @RequiredArgsConstructor

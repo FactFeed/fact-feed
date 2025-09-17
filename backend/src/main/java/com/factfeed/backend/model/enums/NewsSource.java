@@ -1,4 +1,4 @@
-package com.factfeed.backend.model;
+package com.factfeed.backend.model.enums;
 
 import lombok.Getter;
 

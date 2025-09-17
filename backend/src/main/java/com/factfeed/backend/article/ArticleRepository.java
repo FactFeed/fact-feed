@@ -1,7 +1,9 @@
-package com.factfeed.backend.repository;
+package com.factfeed.backend.article;
 
-import com.factfeed.backend.entity.Article;
-import com.factfeed.backend.model.NewsSource;
+import com.factfeed.backend.model.entity.Article;
+import com.factfeed.backend.model.enums.NewsSource;
+import java.time.LocalDateTime;
+import java.util.Optional;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
@@ -9,12 +11,11 @@ import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 import org.springframework.stereotype.Repository;
 
-import java.time.LocalDateTime;
-import java.util.Optional;
-
 @Repository
 public interface ArticleRepository extends JpaRepository<Article, Long> {
     Optional<Article> findByUrl(String url);
+
+    boolean existsByUrl(String url);
 
     Page<Article> findBySource(NewsSource source, Pageable pageable);
 
@@ -29,4 +30,3 @@ public interface ArticleRepository extends JpaRepository<Article, Long> {
             "AND LENGTH(TRIM(:keyword)) >= 3")
     Page<Article> searchByKeyword(@Param("keyword") String keyword, Pageable pageable);
 }
-
