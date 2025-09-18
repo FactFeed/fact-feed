@@ -83,7 +83,7 @@ public class ArticleService {
                 if (enableAISummarization) {
                     lightDTOs.add(new ArticleLightDTO(
                             (long) validArticles.size(), // Temporary ID for mapping
-                            articleDTO.getTitle(), 
+                            articleDTO.getTitle(),
                             articleDTO.getContent()
                     ));
                 }
@@ -117,7 +117,7 @@ public class ArticleService {
 
                 // Create article entity
                 Article article = createArticleFromDTOWithoutSaving(articleDTO, sourceForArticle);
-                
+
                 // Apply AI summary if available
                 if (enableAISummarization && i < summaries.size()) {
                     SummarizationResponseDTO summary = summaries.get(i);
@@ -125,7 +125,7 @@ public class ArticleService {
                         article.setSummarizedContent(summary.getSummary());
                         log.debug("Applied AI summary to article: {}", article.getTitle());
                     } else {
-                        log.warn("AI summarization failed for article: {} - {}", 
+                        log.warn("AI summarization failed for article: {} - {}",
                                 article.getTitle(), summary.getError());
                     }
                 }
@@ -392,7 +392,7 @@ public class ArticleService {
 
         // First, process articles normally to get entity objects
         List<Article> articles = processScrapingResult(scrapingResult);
-        
+
         if (articles.isEmpty()) {
             return articles;
         }
@@ -404,7 +404,7 @@ public class ArticleService {
 
         // Get AI summaries
         List<SummarizationResponseDTO> summaries = aiService.summarizeArticles(lightDTOs);
-        
+
         // Update articles with summaries and save again
         for (SummarizationResponseDTO summary : summaries) {
             if (summary.isSuccess() && summary.getArticleId() != null) {
@@ -418,7 +418,7 @@ public class ArticleService {
         // Save updated articles
         List<Article> savedWithSummaries = articleRepository.saveAll(articles);
         log.info("Successfully processed {} articles with AI summaries", savedWithSummaries.size());
-        
+
         return savedWithSummaries;
     }
 
@@ -428,17 +428,17 @@ public class ArticleService {
     @Transactional
     public List<SummarizationResponseDTO> summarizeUnsummarizedArticles(int limit) {
         log.info("Starting summarization of unsummarized articles (limit: {})", limit);
-        
+
         List<ArticleLightDTO> unsummarized = articleRepository.findUnsummarizedArticles(
                 PageRequest.of(0, limit));
-        
+
         if (unsummarized.isEmpty()) {
             log.info("No unsummarized articles found");
             return new ArrayList<>();
         }
 
         List<SummarizationResponseDTO> results = aiService.summarizeArticles(unsummarized);
-        
+
         // Update articles with summaries
         for (SummarizationResponseDTO result : results) {
             if (result.isSuccess() && result.getArticleId() != null) {
@@ -449,7 +449,7 @@ public class ArticleService {
                         });
             }
         }
-        
+
         return results;
     }
 

@@ -16,11 +16,11 @@ public class SummarizationResponseDTO {
     private String summary;
     private boolean success;
     private String error;
-    
+
     public static SummarizationResponseDTO success(Long articleId, String originalTitle, String summary) {
         return new SummarizationResponseDTO(articleId, originalTitle, summary, true, null);
     }
-    
+
     public static SummarizationResponseDTO failure(Long articleId, String originalTitle, String error) {
         return new SummarizationResponseDTO(articleId, originalTitle, null, false, error);
     }

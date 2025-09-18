@@ -15,7 +15,7 @@ public class ArticleLightDTO {
     private Long id;
     private String title;
     private String content;
-    
+
     public ArticleLightDTO(String title, String content) {
         this.title = title;
         this.content = content;
