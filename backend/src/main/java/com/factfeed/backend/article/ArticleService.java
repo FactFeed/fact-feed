@@ -1,7 +1,10 @@
 package com.factfeed.backend.article;
 
+import com.factfeed.backend.ai.AIService;
 import com.factfeed.backend.model.dto.ArticleDTO;
+import com.factfeed.backend.model.dto.ArticleLightDTO;
 import com.factfeed.backend.model.dto.ScrapingResultDTO;
+import com.factfeed.backend.model.dto.SummarizationResponseDTO;
 import com.factfeed.backend.model.entity.Article;
 import com.factfeed.backend.model.enums.NewsSource;
 import java.time.LocalDateTime;
@@ -14,6 +17,7 @@ import java.util.Optional;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -38,10 +42,18 @@ public class ArticleService {
             DateTimeFormatter.ofPattern("yyyy-MM-dd")
     );
     private final ArticleRepository articleRepository;
+    private final AIService aiService;
 
     public List<Article> processScrapingResult(ScrapingResultDTO scrapingResult) {
-        log.info("Processing scraping result from {} with {} articles",
-                scrapingResult.getSiteName(), scrapingResult.getArticles().size());
+        return processScrapingResult(scrapingResult, true); // Default to automated AI summarization
+    }
+
+    /**
+     * Process scraping result with optional AI summarization
+     */
+    public List<Article> processScrapingResult(ScrapingResultDTO scrapingResult, boolean enableAISummarization) {
+        log.info("Processing scraping result from {} with {} articles (AI summarization: {})",
+                scrapingResult.getSiteName(), scrapingResult.getArticles().size(), enableAISummarization);
 
         // Pre-fetch existing URLs to avoid per-row existence queries
         List<String> incomingUrls = scrapingResult.getArticles().stream()
@@ -51,35 +63,89 @@ public class ArticleService {
                 .toList();
         List<String> existingUrls = articleRepository.findExistingUrls(incomingUrls);
 
-        List<Article> toSave = new ArrayList<>();
+        // Filter out duplicates and create lightweight DTOs for AI processing
+        List<ArticleDTO> validArticles = new ArrayList<>();
+        List<ArticleLightDTO> lightDTOs = new ArrayList<>();
 
         for (ArticleDTO articleDTO : scrapingResult.getArticles()) {
             try {
-                // Resolve per-article source to handle aggregated results from multiple sources
-                NewsSource sourceForArticle = parseFromUrl(articleDTO.getUrl());
-                if (sourceForArticle == null) {
-                    // Fallback to siteName when URL parsing fails
-                    sourceForArticle = resolveNewsSource(scrapingResult.getSiteName(), Arrays.asList(articleDTO));
-                }
-
                 String cleanUrl = articleDTO.getUrl() != null ? articleDTO.getUrl().trim() : null;
                 if (cleanUrl == null || existingUrls.contains(cleanUrl)) {
                     log.debug("Skipping duplicate or invalid URL: {}", cleanUrl);
                     continue;
                 }
 
-                Article article = processArticle(articleDTO, sourceForArticle);
-                if (article != null) toSave.add(article);
+                // Validate article before processing
+                validateArticleDTO(articleDTO);
+                validArticles.add(articleDTO);
+
+                // Create lightweight DTO for AI processing (with temporary ID)
+                if (enableAISummarization) {
+                    lightDTOs.add(new ArticleLightDTO(
+                            (long) validArticles.size(), // Temporary ID for mapping
+                            articleDTO.getTitle(), 
+                            articleDTO.getContent()
+                    ));
+                }
+            } catch (Exception e) {
+                log.error("Error validating article {}: {}", articleDTO.getUrl(), e.getMessage());
+            }
+        }
+
+        if (validArticles.isEmpty()) {
+            log.info("No new valid articles to save");
+            return new ArrayList<>();
+        }
+
+        // Get AI summaries for all valid articles
+        List<SummarizationResponseDTO> summaries = new ArrayList<>();
+        if (enableAISummarization && !lightDTOs.isEmpty()) {
+            log.info("Getting AI summaries for {} articles", lightDTOs.size());
+            summaries = aiService.summarizeArticles(lightDTOs);
+        }
+
+        // Now create Article entities and apply summaries
+        List<Article> toSave = new ArrayList<>();
+        for (int i = 0; i < validArticles.size(); i++) {
+            ArticleDTO articleDTO = validArticles.get(i);
+            try {
+                // Resolve source for each article
+                NewsSource sourceForArticle = parseFromUrl(articleDTO.getUrl());
+                if (sourceForArticle == null) {
+                    sourceForArticle = resolveNewsSource(scrapingResult.getSiteName(), Arrays.asList(articleDTO));
+                }
+
+                // Create article entity
+                Article article = createArticleFromDTOWithoutSaving(articleDTO, sourceForArticle);
+                
+                // Apply AI summary if available
+                if (enableAISummarization && i < summaries.size()) {
+                    SummarizationResponseDTO summary = summaries.get(i);
+                    if (summary.isSuccess() && summary.getSummary() != null) {
+                        article.setSummarizedContent(summary.getSummary());
+                        log.debug("Applied AI summary to article: {}", article.getTitle());
+                    } else {
+                        log.warn("AI summarization failed for article: {} - {}", 
+                                article.getTitle(), summary.getError());
+                    }
+                }
+
+                if (isValidArticle(article)) {
+                    toSave.add(article);
+                }
             } catch (Exception e) {
                 log.error("Error processing article {}: {}", articleDTO.getUrl(), e.getMessage());
             }
         }
+
         if (toSave.isEmpty()) {
-            log.info("No new articles to save");
+            log.info("No valid articles to save after processing");
             return new ArrayList<>();
         }
+
+        // Save all articles with summaries in a single transaction
         List<Article> saved = articleRepository.saveAll(toSave);
-        log.info("Successfully saved {} new articles", saved.size());
+        log.info("Successfully saved {} articles with AI summarization (if enabled)", saved.size());
         return saved;
     }
 
@@ -141,6 +207,18 @@ public class ArticleService {
     }
 
     private Article createArticleFromDTO(ArticleDTO articleDTO, NewsSource source, String cleanUrl) {
+        return createArticleFromDTOWithoutSaving(articleDTO, source, cleanUrl);
+    }
+
+    /**
+     * Create Article entity from DTO without saving to database
+     */
+    private Article createArticleFromDTOWithoutSaving(ArticleDTO articleDTO, NewsSource source) {
+        String cleanUrl = articleDTO.getUrl().trim();
+        return createArticleFromDTOWithoutSaving(articleDTO, source, cleanUrl);
+    }
+
+    private Article createArticleFromDTOWithoutSaving(ArticleDTO articleDTO, NewsSource source, String cleanUrl) {
         Article article = new Article();
         article.setTitle(truncateString(articleDTO.getTitle(), 500));
         article.setContent(articleDTO.getContent().trim());
@@ -303,6 +381,84 @@ public class ArticleService {
 
     public Page<Article> getArticlesBySource(NewsSource source, Pageable pageable) {
         return articleRepository.findBySource(source, pageable);
+    }
+
+    /**
+     * Process articles with AI summarization before saving
+     */
+    public List<Article> processScrapingResultWithSummarization(ScrapingResultDTO scrapingResult) {
+        log.info("Processing scraping result with AI summarization from {} with {} articles",
+                scrapingResult.getSiteName(), scrapingResult.getArticles().size());
+
+        // First, process articles normally to get entity objects
+        List<Article> articles = processScrapingResult(scrapingResult);
+        
+        if (articles.isEmpty()) {
+            return articles;
+        }
+
+        // Create light DTOs for AI processing
+        List<ArticleLightDTO> lightDTOs = articles.stream()
+                .map(article -> new ArticleLightDTO(article.getId(), article.getTitle(), article.getContent()))
+                .toList();
+
+        // Get AI summaries
+        List<SummarizationResponseDTO> summaries = aiService.summarizeArticles(lightDTOs);
+        
+        // Update articles with summaries and save again
+        for (SummarizationResponseDTO summary : summaries) {
+            if (summary.isSuccess() && summary.getArticleId() != null) {
+                articles.stream()
+                        .filter(article -> article.getId().equals(summary.getArticleId()))
+                        .findFirst()
+                        .ifPresent(article -> article.setSummarizedContent(summary.getSummary()));
+            }
+        }
+
+        // Save updated articles
+        List<Article> savedWithSummaries = articleRepository.saveAll(articles);
+        log.info("Successfully processed {} articles with AI summaries", savedWithSummaries.size());
+        
+        return savedWithSummaries;
+    }
+
+    /**
+     * Summarize existing unsummarized articles
+     */
+    @Transactional
+    public List<SummarizationResponseDTO> summarizeUnsummarizedArticles(int limit) {
+        log.info("Starting summarization of unsummarized articles (limit: {})", limit);
+        
+        List<ArticleLightDTO> unsummarized = articleRepository.findUnsummarizedArticles(
+                PageRequest.of(0, limit));
+        
+        if (unsummarized.isEmpty()) {
+            log.info("No unsummarized articles found");
+            return new ArrayList<>();
+        }
+
+        List<SummarizationResponseDTO> results = aiService.summarizeArticles(unsummarized);
+        
+        // Update articles with summaries
+        for (SummarizationResponseDTO result : results) {
+            if (result.isSuccess() && result.getArticleId() != null) {
+                articleRepository.findById(result.getArticleId())
+                        .ifPresent(article -> {
+                            article.setSummarizedContent(result.getSummary());
+                            articleRepository.save(article);
+                        });
+            }
+        }
+        
+        return results;
+    }
+
+    /**
+     * Get recent articles for clustering analysis
+     */
+    public List<ArticleLightDTO> getRecentArticlesForClustering(int hours) {
+        LocalDateTime fromDate = LocalDateTime.now().minusHours(hours);
+        return articleRepository.findRecentArticlesLight(fromDate);
     }
 
     public Page<Article> searchArticles(String keyword, Pageable pageable) {

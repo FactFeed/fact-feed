@@ -51,6 +51,9 @@ public class Article {
     @Column(nullable = false, columnDefinition = "TEXT")
     private String content;
 
+    @Column(columnDefinition = "TEXT")
+    private String summarizedContent;
+
     @Column(length = 50)
     private String category;
 
