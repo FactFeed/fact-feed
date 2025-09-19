@@ -1,0 +1,58 @@
+sources:
+  - name: "Prothom Alo"
+    type: "web_scraping"
+    base_url: "https://www.prothomalo.com"
+    category_urls:
+      - url: "https://www.prothomalo.com/bangladesh"
+        category: "bangladesh"
+      - url: "https://www.prothomalo.com/world"
+        category: "world"
+      - url: "https://www.prothomalo.com/politics"
+        category: "politics"
+    article_selector: "a[href*='prothomalo.com/']"
+    title_selector: "h1"
+    content_selector: "p"
+    published_selector: "time"
+    rate_limit_minutes: 5
+
+  - name: "Samakal"
+    type: "web_scraping"
+    base_url: "https://samakal.com"
+    category_urls:
+      - url: "https://samakal.com/bangladesh"
+        category: "bangladesh"
+      - url: "https://samakal.com/international"
+        category: "international"
+    article_selector: "a[href*='samakal.com/']"
+    title_selector: "h1"
+    content_selector: "p"
+    published_selector: "time"
+    rate_limit_minutes: 5
+
+  - name: "Ittefaq"
+    type: "web_scraping"
+    base_url: "https://www.ittefaq.com.bd"
+    category_urls:
+      - url: "https://www.ittefaq.com.bd/country"
+        category: "country"
+      - url: "https://www.ittefaq.com.bd/world"
+        category: "world"
+    article_selector: "a[href*='ittefaq.com.bd/']"
+    title_selector: "h1"
+    content_selector: "p"
+    published_selector: "time"
+    rate_limit_minutes: 5
+
+  - name: "Jaijaidin"
+    type: "web_scraping"
+    base_url: "https://www.jaijaidinbd.com"
+    category_urls:
+      - url: "https://www.jaijaidinbd.com/country"
+        category: "country"
+      - url: "https://www.jaijaidinbd.com/international"
+        category: "international"
+    article_selector: "a[href*='jaijaidinbd.com/']"
+    title_selector: "h1"
+    content_selector: "p"
+    published_selector: "time"
+    rate_limit_minutes: 5

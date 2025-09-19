@@ -1,0 +1,57 @@
+plugins {
+	id 'java'
+	id 'org.springframework.boot' version '3.5.6'
+	id 'io.spring.dependency-management' version '1.1.7'
+}
+
+group = 'com.factfeed'
+version = '0.0.1-SNAPSHOT'
+description = 'FactFeed: A Modern News Aggregator with AI-Powered Analysis'
+
+java {
+	toolchain {
+		languageVersion = JavaLanguageVersion.of(23)
+	}
+}
+
+repositories {
+	mavenCentral()
+	maven { url 'https://repo.spring.io/milestone' }
+}
+
+dependencies {
+	implementation 'org.springframework.boot:spring-boot-starter-web'
+	implementation 'org.springframework.boot:spring-boot-starter-data-jpa'
+	implementation 'org.springframework.ai:spring-ai-openai-spring-boot-starter:1.0.0-M2'
+	implementation 'org.postgresql:postgresql'
+	implementation 'org.jsoup:jsoup:1.17.2'
+	implementation 'com.rometools:rome:2.1.0'
+	implementation 'org.yaml:snakeyaml'
+	testImplementation 'org.springframework.boot:spring-boot-starter-test'
+	testImplementation 'com.h2database:h2'
+	testRuntimeOnly 'org.junit.platform:junit-platform-launcher'
+}
+
+// Frontend build integration
+tasks.register('buildFrontend', Exec) {
+	workingDir = file('frontend')
+	commandLine 'npm', 'run', 'build'
+	// Make this task conditional - only run if frontend directory exists and has package.json
+	onlyIf { file('frontend/package.json').exists() }
+}
+
+tasks.register('copyFrontend', Copy) {
+	dependsOn 'buildFrontend'
+	from 'frontend/dist'
+	into 'src/main/resources/static'
+	// Make this task conditional as well
+	onlyIf { file('frontend/dist').exists() }
+}
+
+tasks.named('processResources') {
+	dependsOn 'copyFrontend'
+}
+
+tasks.named('test') {
+	useJUnitPlatform()
+}
