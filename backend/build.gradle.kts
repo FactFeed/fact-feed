@@ -27,7 +27,9 @@ repositories {
 dependencies {
     implementation("me.paulschwarz:spring-dotenv:4.0.0")
     implementation("org.jsoup:jsoup:1.21.2")
-    implementation("org.springframework.ai:spring-ai-starter-model-google-genai:1.1.0-M1")
+    implementation("org.seleniumhq.selenium:selenium-java:4.35.0")
+    implementation("io.github.bonigarcia:webdrivermanager:6.3.2")
+//    implementation("org.springframework.ai:spring-ai-starter-model-google-genai:1.1.0-M1")
     implementation("org.springframework.boot:spring-boot-starter-data-jpa")
     implementation("org.springframework.boot:spring-boot-starter-data-rest")
     implementation("org.springframework.boot:spring-boot-starter-web")
@@ -39,6 +41,7 @@ dependencies {
     annotationProcessor("org.projectlombok:lombok")
     testImplementation("org.springframework.boot:spring-boot-starter-test")
     runtimeOnly("org.postgresql:postgresql")
+    testRuntimeOnly("com.h2database:h2")
     testRuntimeOnly("org.junit.platform:junit-platform-launcher")
 }
 

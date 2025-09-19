@@ -1,6 +1,6 @@
-package com.factfeed.backend.model.entity;
+package com.factfeed.backend.db.entity;
 
-import com.factfeed.backend.model.enums.NewsSource;
+import com.factfeed.backend.scraper.model.NewsSource;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
 import jakarta.persistence.EnumType;
@@ -8,19 +8,25 @@ import jakarta.persistence.Enumerated;
 import jakarta.persistence.GeneratedValue;
 import jakarta.persistence.GenerationType;
 import jakarta.persistence.Id;
+import jakarta.persistence.Index;
 import jakarta.persistence.Table;
 import java.time.LocalDateTime;
 import lombok.AllArgsConstructor;
+import lombok.Builder;
 import lombok.Data;
 import lombok.NoArgsConstructor;
 import org.hibernate.annotations.CreationTimestamp;
 import org.hibernate.annotations.UpdateTimestamp;
 
-@Entity
-@Table(name = "articles")
 @Data
+@Builder
 @NoArgsConstructor
 @AllArgsConstructor
+@Entity
+@Table(name = "articles", indexes = {
+        @Index(name = "idx_articles_url", columnList = "url"),
+        @Index(name = "idx_articles_published_at", columnList = "articlePublishedAt")
+})
 public class Article {
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
@@ -29,23 +35,23 @@ public class Article {
     @Column(nullable = false, unique = true, columnDefinition = "TEXT")
     private String url;
 
-    @Column(nullable = false, length = 500)
+    @Column(nullable = false, columnDefinition = "TEXT")
     private String title;
 
-    @Column(length = 100)
+    @Column(columnDefinition = "TEXT")
     private String author;
 
-    @Column(length = 100)
+    @Column(columnDefinition = "TEXT")
     private String authorLocation;
 
-    private LocalDateTime publishedAt;
+    private LocalDateTime articlePublishedAt;
 
-    private LocalDateTime updatedAt;
+    private LocalDateTime articleUpdatedAt;
 
     @Column(columnDefinition = "TEXT")
     private String imageUrl;
 
-    @Column(length = 500)
+    @Column(columnDefinition = "TEXT")
     private String imageCaption;
 
     @Column(nullable = false, columnDefinition = "TEXT")
@@ -54,17 +60,15 @@ public class Article {
     @Column(columnDefinition = "TEXT")
     private String summarizedContent;
 
-    @Column(length = 50)
+    @Column(columnDefinition = "TEXT")
     private String category;
 
-    @Column(length = 500)
+    @Column(columnDefinition = "TEXT")
     private String tags;
 
     @Enumerated(EnumType.STRING)
     @Column(nullable = false)
     private NewsSource source;
-
-    private Integer wordCount;
 
     @CreationTimestamp
     private LocalDateTime scrapedAt;
