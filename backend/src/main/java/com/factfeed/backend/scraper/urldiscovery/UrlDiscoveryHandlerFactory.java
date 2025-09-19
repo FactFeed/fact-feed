@@ -1,4 +1,4 @@
-package com.factfeed.backend.scraper.UrlDiscovery;
+package com.factfeed.backend.scraper.urldiscovery;
 
 import com.factfeed.backend.db.repository.ArticleRepository;
 import com.factfeed.backend.scraper.model.NewsSource;

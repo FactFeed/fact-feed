@@ -1,4 +1,4 @@
-package com.factfeed.backend.scraper.UrlDiscovery;
+package com.factfeed.backend.scraper.urldiscovery;
 
 import java.time.Duration;
 import java.util.ArrayList;
