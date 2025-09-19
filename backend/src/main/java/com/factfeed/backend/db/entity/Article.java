@@ -25,7 +25,7 @@ import org.hibernate.annotations.UpdateTimestamp;
 @Entity
 @Table(name = "articles", indexes = {
         @Index(name = "idx_articles_url", columnList = "url"),
-        @Index(name = "idx_articles_published_at", columnList = "publishedAt")
+        @Index(name = "idx_articles_published_at", columnList = "articlePublishedAt")
 })
 public class Article {
     @Id
