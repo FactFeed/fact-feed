@@ -7,7 +7,7 @@ import lombok.Getter;
 @Getter
 @AllArgsConstructor
 public enum NewsSource {
-    PROTHOMALO("prothom_alo", "Prothom Alo", "https://www.prothomalo.com/", "collection/latest", ".more, .load-more-content", "a.title-link", List.of("video", "ampstories", "gallery", "photo")),
+    PROTHOMALO("prothom_alo", "Prothom Alo", "https://www.prothomalo.com/", "collection/latest", ".more, .load-more-content", "a.title-link", List.of("video", "ampstories", "gallery", "photo", "lifestyle")),
     ITTEFAQ("ittefaq", "The Daily Ittefaq", "https://www.ittefaq.com.bd/", "latest-news", ".ajax_load_btn", "a.link_overlay", List.of("video", "gallery")),
     SAMAKAL("samakal", "Samakal", "https://samakal.com/", "latest/news", ".load-more-data", "div.CatListNews > a", List.of("video", "gallery")),
     JUGANTOR("jugantor", "Jugantor", "https://www.jugantor.com/", "latest", ".clickLoadMore", "a.linkOverlay", List.of("video", "gallery")),

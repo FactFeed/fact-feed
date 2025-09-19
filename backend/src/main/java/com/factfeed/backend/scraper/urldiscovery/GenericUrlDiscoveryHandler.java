@@ -45,4 +45,10 @@ public class GenericUrlDiscoveryHandler extends BaseUrlDiscoveryHandler {
     protected List<String> getUrlsAlreadyInDb() {
         return articleRepository.findRecentUrlsBySource(newsSource);
     }
+
+    @Override
+    protected boolean usesPagination() {
+        // BD Pratidin uses pagination instead of load more buttons
+        return newsSource == NewsSource.BDPROTIDIN;
+    }
 }
