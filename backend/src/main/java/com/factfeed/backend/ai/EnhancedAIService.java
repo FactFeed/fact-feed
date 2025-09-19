@@ -11,6 +11,9 @@ import com.factfeed.backend.model.entity.ApiUsageLog;
 import com.factfeed.backend.model.entity.Article;
 import com.factfeed.backend.model.entity.DiscrepancyReport;
 import com.factfeed.backend.model.repository.ApiUsageLogRepository;
+import com.fasterxml.jackson.core.JsonProcessingException;
+import com.fasterxml.jackson.databind.JsonNode;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.HashMap;
@@ -39,6 +42,7 @@ public class EnhancedAIService {
             3. The list of article IDs that belong to this event
             4. A confidence score (0.0 to 1.0) for the clustering
             5. The main category/topic
+            6. Almost all the content should be in bangla
             
             Return the response as a JSON array with this exact structure:
             [
@@ -65,6 +69,7 @@ public class EnhancedAIService {
             3. Key points as a bulleted list
             4. Timeline of events if applicable
             5. Confidence score for the aggregation (0.0 to 1.0)
+            6. Almost all the content should be in bangla
             
             Return the response as JSON:
             {
@@ -90,6 +95,7 @@ public class EnhancedAIService {
             5. Sources involved in the discrepancy
             6. Severity score (0.0 to 1.0)
             7. Confidence score (0.0 to 1.0)
+            8. Almost all the content should be in bangla
             
             Return as JSON array:
             [
@@ -111,11 +117,13 @@ public class EnhancedAIService {
     private final ChatClient chatClient;
     private final Environment env;
     private final ApiUsageLogRepository apiUsageLogRepository;
+    private final ObjectMapper objectMapper;
 
     public EnhancedAIService(ChatClient.Builder builder, Environment env, ApiUsageLogRepository apiUsageLogRepository) {
         this.chatClient = builder.build();
         this.env = env;
         this.apiUsageLogRepository = apiUsageLogRepository;
+        this.objectMapper = new ObjectMapper();
     }
 
     /**
@@ -287,52 +295,96 @@ public class EnhancedAIService {
         List<EventClusteringResponseDTO.EventCluster> clusters = new ArrayList<>();
 
         try {
+            log.info("Parsing event clustering response");
+            log.debug("Raw clustering response: {}", response);
+
             // Extract JSON array from response
             String jsonStr = extractJsonFromResponse(response);
+            log.debug("Extracted JSON for clustering: {}", jsonStr);
 
-            // Simple JSON parsing for clustering response
-            Pattern clusterPattern = Pattern.compile(
-                    "\\{[^}]*\"eventTitle\"\\s*:\\s*\"([^\"]+)\"[^}]*\"eventDescription\"\\s*:\\s*\"([^\"]+)\"[^}]*\"articleIds\"\\s*:\\s*\\[([^\\]]+)\\][^}]*\"confidenceScore\"\\s*:\\s*([0-9.]+)[^}]*\"category\"\\s*:\\s*\"([^\"]+)\"[^}]*\\}",
-                    Pattern.DOTALL
-            );
+            if (jsonStr.isEmpty() || jsonStr.equals("{}")) {
+                log.warn("Empty JSON extracted from clustering response");
+                return clusters;
+            }
 
-            Matcher matcher = clusterPattern.matcher(jsonStr);
-            while (matcher.find()) {
-                String title = matcher.group(1);
-                String description = matcher.group(2);
-                String articleIdsStr = matcher.group(3);
-                double confidence = Double.parseDouble(matcher.group(4));
-                String category = matcher.group(5);
+            JsonNode jsonNode = objectMapper.readTree(jsonStr);
 
-                // Parse article IDs
-                List<Long> articleIds = new ArrayList<>();
-                String[] ids = articleIdsStr.split(",");
-                for (String id : ids) {
+            if (jsonNode.isArray()) {
+                // Process array of clusters
+                for (JsonNode clusterNode : jsonNode) {
                     try {
-                        articleIds.add(Long.parseLong(id.trim()));
-                    } catch (NumberFormatException e) {
-                        log.warn("Invalid article ID in clustering response: {}", id);
+                        EventClusteringResponseDTO.EventCluster cluster = parseClusterNode(clusterNode);
+                        if (cluster != null) {
+                            clusters.add(cluster);
+                        }
+                    } catch (Exception e) {
+                        log.warn("Error parsing individual cluster: {}", e.getMessage());
                     }
                 }
-
-                if (!articleIds.isEmpty()) {
-                    EventClusteringResponseDTO.EventCluster cluster = new EventClusteringResponseDTO.EventCluster();
-                    cluster.setEventTitle(title);
-                    cluster.setEventDescription(description);
-                    cluster.setArticleIds(articleIds);
-                    cluster.setConfidenceScore(confidence);
-                    cluster.setCategory(category);
-                    cluster.setMetadata(new HashMap<>());
-
+            } else if (jsonNode.isObject()) {
+                // Single cluster object
+                EventClusteringResponseDTO.EventCluster cluster = parseClusterNode(jsonNode);
+                if (cluster != null) {
                     clusters.add(cluster);
                 }
             }
 
+            log.info("Successfully parsed {} clusters", clusters.size());
+
+        } catch (JsonProcessingException e) {
+            log.error("JSON parsing error in clustering response: {}", e.getMessage());
+            log.debug("Failed clustering response: {}", response);
         } catch (Exception e) {
-            log.error("Error parsing clustering response: {}", e.getMessage());
+            log.error("Unexpected error parsing clustering response: {}", e.getMessage());
         }
 
         return clusters;
+    }
+
+    /**
+     * Parse individual cluster node
+     */
+    private EventClusteringResponseDTO.EventCluster parseClusterNode(JsonNode clusterNode) {
+        try {
+            String title = getJsonFieldAsString(clusterNode, "eventTitle");
+            String description = getJsonFieldAsString(clusterNode, "eventDescription");
+            String category = getJsonFieldAsString(clusterNode, "category");
+            double confidence = getJsonFieldAsDouble(clusterNode, "confidenceScore", 0.0);
+
+            // Parse article IDs
+            List<Long> articleIds = new ArrayList<>();
+            JsonNode articleIdsNode = clusterNode.get("articleIds");
+            if (articleIdsNode != null && articleIdsNode.isArray()) {
+                for (JsonNode idNode : articleIdsNode) {
+                    try {
+                        articleIds.add(idNode.asLong());
+                    } catch (Exception e) {
+                        log.warn("Invalid article ID in cluster: {}", idNode);
+                    }
+                }
+            }
+
+            // Validate required fields
+            if (title.isEmpty() || articleIds.isEmpty()) {
+                log.warn("Cluster missing required fields - title: {}, articleIds count: {}", 
+                        title.isEmpty() ? "empty" : "present", articleIds.size());
+                return null;
+            }
+
+            EventClusteringResponseDTO.EventCluster cluster = new EventClusteringResponseDTO.EventCluster();
+            cluster.setEventTitle(title);
+            cluster.setEventDescription(description.isEmpty() ? "Event cluster" : description);
+            cluster.setArticleIds(articleIds);
+            cluster.setConfidenceScore(Math.max(0.0, Math.min(1.0, confidence)));
+            cluster.setCategory(category.isEmpty() ? "general" : category);
+            cluster.setMetadata(new HashMap<>());
+
+            return cluster;
+
+        } catch (Exception e) {
+            log.error("Error parsing cluster node: {}", e.getMessage());
+            return null;
+        }
     }
 
     /**
@@ -340,45 +392,128 @@ public class EnhancedAIService {
      */
     private AggregatedContentDTO parseAggregationResponse(String response, Long eventId, int articleCount) {
         try {
+            log.info("Parsing aggregation response for event {}", eventId);
+            log.debug("Raw AI response: {}", response);
+
             // Extract JSON from response
             String jsonStr = extractJsonFromResponse(response);
+            log.debug("Extracted JSON: {}", jsonStr);
 
-            // Parse aggregation fields
-            String title = extractJsonField(jsonStr, "aggregatedTitle");
-            String summary = extractJsonField(jsonStr, "aggregatedSummary");
-            String keyPoints = extractJsonField(jsonStr, "keyPoints");
-            String timeline = extractJsonField(jsonStr, "timeline");
-            double confidence = Double.parseDouble(extractJsonField(jsonStr, "confidenceScore"));
+            if (jsonStr.isEmpty() || jsonStr.equals("{}")) {
+                log.warn("Empty or invalid JSON extracted from AI response");
+                return createFallbackAggregatedContent(eventId, articleCount, "Empty JSON response");
+            }
 
+            // Parse with Jackson ObjectMapper for robust JSON handling
+            JsonNode jsonNode = objectMapper.readTree(jsonStr);
+
+            // Extract fields with proper null checking and validation
+            String title = getJsonFieldAsString(jsonNode, "aggregatedTitle");
+            String summary = getJsonFieldAsString(jsonNode, "aggregatedSummary");
+            String keyPoints = getJsonFieldAsString(jsonNode, "keyPoints");
+            String timeline = getJsonFieldAsString(jsonNode, "timeline");
+            double confidence = getJsonFieldAsDouble(jsonNode, "confidenceScore", 0.0);
+
+            // Validate required fields
+            if (title.isEmpty() && summary.isEmpty()) {
+                log.warn("Both title and summary are empty, creating fallback content");
+                return createFallbackAggregatedContent(eventId, articleCount, "Missing required content fields");
+            }
+
+            // Create and populate DTO
             AggregatedContentDTO dto = new AggregatedContentDTO();
             dto.setEventId(eventId);
-            dto.setAggregatedTitle(title);
-            dto.setAggregatedSummary(summary);
+            dto.setAggregatedTitle(title.isEmpty() ? "Aggregated News Update" : title);
+            dto.setAggregatedSummary(summary.isEmpty() ? "Content aggregation completed" : summary);
             dto.setKeyPoints(keyPoints);
             dto.setTimeline(timeline);
-            dto.setConfidenceScore(confidence);
+            dto.setConfidenceScore(Math.max(0.0, Math.min(1.0, confidence))); // Clamp between 0-1
             dto.setTotalArticles(articleCount);
             dto.setCreatedAt(LocalDateTime.now());
             dto.setUpdatedAt(LocalDateTime.now());
             dto.setGeneratedBy(env.getProperty("spring.ai.google.genai.model", "unknown"));
 
+            log.info("Successfully parsed aggregation response for event {} with confidence {}", 
+                    eventId, dto.getConfidenceScore());
+
             return dto;
+
+        } catch (JsonProcessingException e) {
+            log.error("JSON parsing error for event {}: {}", eventId, e.getMessage());
+            log.debug("Failed to parse response: {}", response);
+            return createFallbackAggregatedContent(eventId, articleCount, "JSON parsing error: " + e.getMessage());
 
         } catch (Exception e) {
-            log.error("Error parsing aggregation response: {}", e.getMessage());
-
-            // Return fallback DTO
-            AggregatedContentDTO dto = new AggregatedContentDTO();
-            dto.setEventId(eventId);
-            dto.setAggregatedTitle("Aggregation parsing failed");
-            dto.setAggregatedSummary("Could not parse AI response for aggregated content");
-            dto.setConfidenceScore(0.0);
-            dto.setTotalArticles(articleCount);
-            dto.setCreatedAt(LocalDateTime.now());
-            dto.setUpdatedAt(LocalDateTime.now());
-
-            return dto;
+            log.error("Unexpected error parsing aggregation response for event {}: {}", eventId, e.getMessage());
+            log.debug("Failed to parse response: {}", response);
+            return createFallbackAggregatedContent(eventId, articleCount, "Parsing error: " + e.getMessage());
         }
+    }
+
+    /**
+     * Safely extract string field from JSON node
+     */
+    private String getJsonFieldAsString(JsonNode jsonNode, String fieldName) {
+        if (jsonNode == null || !jsonNode.has(fieldName)) {
+            return "";
+        }
+        
+        JsonNode fieldNode = jsonNode.get(fieldName);
+        if (fieldNode == null || fieldNode.isNull()) {
+            return "";
+        }
+        
+        String value = fieldNode.asText();
+        return value != null ? value.trim() : "";
+    }
+
+    /**
+     * Safely extract double field from JSON node
+     */
+    private double getJsonFieldAsDouble(JsonNode jsonNode, String fieldName, double defaultValue) {
+        if (jsonNode == null || !jsonNode.has(fieldName)) {
+            return defaultValue;
+        }
+        
+        JsonNode fieldNode = jsonNode.get(fieldName);
+        if (fieldNode == null || fieldNode.isNull()) {
+            return defaultValue;
+        }
+        
+        if (fieldNode.isNumber()) {
+            return fieldNode.asDouble();
+        }
+        
+        // Try to parse as string
+        try {
+            String stringValue = fieldNode.asText();
+            return Double.parseDouble(stringValue);
+        } catch (NumberFormatException e) {
+            log.warn("Could not parse '{}' as double for field '{}', using default: {}", 
+                    fieldNode.asText(), fieldName, defaultValue);
+            return defaultValue;
+        }
+    }
+
+    /**
+     * Create fallback aggregated content when parsing fails
+     */
+    private AggregatedContentDTO createFallbackAggregatedContent(Long eventId, int articleCount, String reason) {
+        log.warn("Creating fallback aggregated content for event {}: {}", eventId, reason);
+        
+        AggregatedContentDTO dto = new AggregatedContentDTO();
+        dto.setEventId(eventId);
+        dto.setAggregatedTitle("Aggregation Processing Error");
+        dto.setAggregatedSummary("Could not generate aggregated content. Reason: " + reason);
+        dto.setKeyPoints("• Content aggregation failed\n• Please try again later");
+        dto.setTimeline("");
+        dto.setConfidenceScore(0.0);
+        dto.setTotalArticles(articleCount);
+        dto.setCreatedAt(LocalDateTime.now());
+        dto.setUpdatedAt(LocalDateTime.now());
+        dto.setGeneratedBy(env.getProperty("spring.ai.google.genai.model", "unknown"));
+
+        return dto;
     }
 
     /**
@@ -388,81 +523,166 @@ public class EnhancedAIService {
         List<DiscrepancyReportDTO> discrepancies = new ArrayList<>();
 
         try {
+            log.info("Parsing discrepancy detection response");
+            log.debug("Raw discrepancy response: {}", response);
+
             String jsonStr = extractJsonFromResponse(response);
+            log.debug("Extracted JSON for discrepancies: {}", jsonStr);
 
-            // Simple parsing for discrepancy array
-            Pattern discrepancyPattern = Pattern.compile(
-                    "\\{[^}]*\"type\"\\s*:\\s*\"([^\"]+)\"[^}]*\"title\"\\s*:\\s*\"([^\"]+)\"[^}]*\"description\"\\s*:\\s*\"([^\"]+)\"[^}]*\"conflictingClaims\"\\s*:\\s*\"([^\"]+)\"[^}]*\"sourcesInvolved\"\\s*:\\s*\"([^\"]+)\"[^}]*\"severityScore\"\\s*:\\s*([0-9.]+)[^}]*\"confidenceScore\"\\s*:\\s*([0-9.]+)[^}]*\\}",
-                    Pattern.DOTALL
-            );
+            if (jsonStr.isEmpty() || jsonStr.equals("{}")) {
+                log.warn("Empty JSON extracted from discrepancy response");
+                return discrepancies;
+            }
 
-            Matcher matcher = discrepancyPattern.matcher(jsonStr);
-            while (matcher.find()) {
-                try {
-                    DiscrepancyReport.DiscrepancyType type = DiscrepancyReport.DiscrepancyType.valueOf(matcher.group(1));
-                    String title = matcher.group(2);
-                    String description = matcher.group(3);
-                    String conflictingClaims = matcher.group(4);
-                    String sourcesInvolved = matcher.group(5);
-                    double severityScore = Double.parseDouble(matcher.group(6));
-                    double confidenceScore = Double.parseDouble(matcher.group(7));
+            JsonNode jsonNode = objectMapper.readTree(jsonStr);
 
-                    DiscrepancyReportDTO dto = new DiscrepancyReportDTO();
-                    dto.setType(type);
-                    dto.setTitle(title);
-                    dto.setDescription(description);
-                    dto.setConflictingClaims(conflictingClaims);
-                    dto.setSourcesInvolved(sourcesInvolved);
-                    dto.setSeverityScore(severityScore);
-                    dto.setConfidenceScore(confidenceScore);
-                    dto.setDetectedAt(LocalDateTime.now());
-                    dto.setDetectedBy(env.getProperty("spring.ai.google.genai.model", "unknown"));
-
-                    discrepancies.add(dto);
-
-                } catch (Exception e) {
-                    log.warn("Error parsing individual discrepancy: {}", e.getMessage());
+            if (jsonNode.isArray()) {
+                // Process array of discrepancies
+                for (JsonNode discrepancyNode : jsonNode) {
+                    try {
+                        DiscrepancyReportDTO discrepancy = parseDiscrepancyNode(discrepancyNode);
+                        if (discrepancy != null) {
+                            discrepancies.add(discrepancy);
+                        }
+                    } catch (Exception e) {
+                        log.warn("Error parsing individual discrepancy: {}", e.getMessage());
+                    }
+                }
+            } else if (jsonNode.isObject()) {
+                // Single discrepancy object
+                DiscrepancyReportDTO discrepancy = parseDiscrepancyNode(jsonNode);
+                if (discrepancy != null) {
+                    discrepancies.add(discrepancy);
                 }
             }
 
+            log.info("Successfully parsed {} discrepancies", discrepancies.size());
+
+        } catch (JsonProcessingException e) {
+            log.error("JSON parsing error in discrepancy response: {}", e.getMessage());
+            log.debug("Failed discrepancy response: {}", response);
         } catch (Exception e) {
-            log.error("Error parsing discrepancy response: {}", e.getMessage());
+            log.error("Unexpected error parsing discrepancy response: {}", e.getMessage());
         }
 
         return discrepancies;
     }
 
     /**
-     * Extract JSON from AI response
+     * Parse individual discrepancy node
      */
-    private String extractJsonFromResponse(String response) {
-        if (response == null) return "{}";
+    private DiscrepancyReportDTO parseDiscrepancyNode(JsonNode discrepancyNode) {
+        try {
+            String typeStr = getJsonFieldAsString(discrepancyNode, "type");
+            String title = getJsonFieldAsString(discrepancyNode, "title");
+            String description = getJsonFieldAsString(discrepancyNode, "description");
+            String conflictingClaims = getJsonFieldAsString(discrepancyNode, "conflictingClaims");
+            String sourcesInvolved = getJsonFieldAsString(discrepancyNode, "sourcesInvolved");
+            double severityScore = getJsonFieldAsDouble(discrepancyNode, "severityScore", 0.5);
+            double confidenceScore = getJsonFieldAsDouble(discrepancyNode, "confidenceScore", 0.5);
 
-        // Find JSON array or object boundaries
-        int arrayStart = response.indexOf('[');
-        int arrayEnd = response.lastIndexOf(']');
-        int objectStart = response.indexOf('{');
-        int objectEnd = response.lastIndexOf('}');
+            // Validate and parse discrepancy type
+            DiscrepancyReport.DiscrepancyType type;
+            try {
+                type = DiscrepancyReport.DiscrepancyType.valueOf(typeStr.toUpperCase());
+            } catch (Exception e) {
+                log.warn("Unknown discrepancy type '{}', using OTHER", typeStr);
+                type = DiscrepancyReport.DiscrepancyType.OTHER;
+            }
 
-        if (arrayStart >= 0 && arrayEnd > arrayStart) {
-            return response.substring(arrayStart, arrayEnd + 1);
-        } else if (objectStart >= 0 && objectEnd > objectStart) {
-            return response.substring(objectStart, objectEnd + 1);
+            // Validate required fields
+            if (title.isEmpty() || description.isEmpty()) {
+                log.warn("Discrepancy missing required fields - title: {}, description: {}", 
+                        title.isEmpty() ? "empty" : "present", description.isEmpty() ? "empty" : "present");
+                return null;
+            }
+
+            DiscrepancyReportDTO dto = new DiscrepancyReportDTO();
+            dto.setType(type);
+            dto.setTitle(title);
+            dto.setDescription(description);
+            dto.setConflictingClaims(conflictingClaims.isEmpty() ? "No specific claims identified" : conflictingClaims);
+            dto.setSourcesInvolved(sourcesInvolved.isEmpty() ? "Multiple sources" : sourcesInvolved);
+            dto.setSeverityScore(Math.max(0.0, Math.min(1.0, severityScore)));
+            dto.setConfidenceScore(Math.max(0.0, Math.min(1.0, confidenceScore)));
+            dto.setDetectedAt(LocalDateTime.now());
+            dto.setDetectedBy(env.getProperty("spring.ai.google.genai.model", "unknown"));
+
+            return dto;
+
+        } catch (Exception e) {
+            log.error("Error parsing discrepancy node: {}", e.getMessage());
+            return null;
         }
-
-        return response; // Return as-is if no clear JSON boundaries
     }
 
     /**
-     * Extract specific field from JSON string
+     * Extract JSON from AI response with improved detection
      */
-    private String extractJsonField(String jsonStr, String fieldName) {
-        Pattern pattern = Pattern.compile("\"" + fieldName + "\"\\s*:\\s*\"([^\"]+)\"");
-        Matcher matcher = pattern.matcher(jsonStr);
-        if (matcher.find()) {
-            return matcher.group(1);
+    private String extractJsonFromResponse(String response) {
+        if (response == null || response.trim().isEmpty()) {
+            log.warn("Empty or null response received");
+            return "{}";
         }
-        return "";
+
+        String cleanedResponse = response.trim();
+        
+        // Try to find JSON object boundaries
+        int objectStart = cleanedResponse.indexOf('{');
+        int objectEnd = cleanedResponse.lastIndexOf('}');
+        
+        // Try to find JSON array boundaries  
+        int arrayStart = cleanedResponse.indexOf('[');
+        int arrayEnd = cleanedResponse.lastIndexOf(']');
+
+        String extractedJson = null;
+
+        // Prefer object over array for aggregation responses
+        if (objectStart >= 0 && objectEnd > objectStart) {
+            extractedJson = cleanedResponse.substring(objectStart, objectEnd + 1);
+        } else if (arrayStart >= 0 && arrayEnd > arrayStart) {
+            extractedJson = cleanedResponse.substring(arrayStart, arrayEnd + 1);
+        }
+
+        if (extractedJson != null) {
+            // Validate that we have a reasonable JSON structure
+            try {
+                objectMapper.readTree(extractedJson);
+                log.debug("Successfully extracted and validated JSON");
+                return extractedJson;
+            } catch (JsonProcessingException e) {
+                log.warn("Extracted JSON is invalid: {}", e.getMessage());
+                log.debug("Invalid JSON: {}", extractedJson);
+            }
+        }
+
+        // If no clear JSON boundaries or invalid JSON, try alternative extraction
+        log.warn("Could not extract valid JSON from response, attempting alternative parsing");
+        
+        // Look for JSON-like patterns in the text
+        Pattern jsonPattern = Pattern.compile("\\{[^{}]*\"[^\"]*\"\\s*:\\s*\"[^\"]*\"[^{}]*\\}", Pattern.DOTALL);
+        Matcher matcher = jsonPattern.matcher(cleanedResponse);
+        
+        if (matcher.find()) {
+            String foundJson = matcher.group();
+            try {
+                objectMapper.readTree(foundJson);
+                log.debug("Found valid JSON pattern in response");
+                return foundJson;
+            } catch (JsonProcessingException e) {
+                log.debug("Found JSON pattern but it's invalid: {}", e.getMessage());
+            }
+        }
+
+        // Last resort: return the entire response if it looks like JSON
+        if (cleanedResponse.startsWith("{") || cleanedResponse.startsWith("[")) {
+            log.warn("Returning entire response as potential JSON");
+            return cleanedResponse;
+        }
+
+        log.error("Could not extract any JSON from response: {}", 
+                cleanedResponse.length() > 200 ? cleanedResponse.substring(0, 200) + "..." : cleanedResponse);
+        return "{}";
     }
 
     /**

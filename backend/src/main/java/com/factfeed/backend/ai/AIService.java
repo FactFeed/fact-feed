@@ -23,6 +23,7 @@ public class AIService {
              Please summarize the following news article in 2-3 concise sentences.\s
              Focus on the key facts, main events, and important details.\s
              Keep the summary neutral and factual.
+             (Almost all the content should be in bangla)
              Return only the summary text without any additional formatting or labels.
             \s
              Title: %s

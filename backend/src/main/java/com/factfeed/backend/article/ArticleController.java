@@ -156,7 +156,7 @@ public class ArticleController {
     public ResponseEntity<Page<Article>> getArticles(
             @RequestParam(defaultValue = "0") @Min(0) int page,
             @RequestParam(defaultValue = "20") @Min(1) @Max(100) int size,
-            @RequestParam(defaultValue = "publishedDate") String sortBy,
+            @RequestParam(defaultValue = "publishedAt") String sortBy,
             @RequestParam(defaultValue = "desc") String sortDir) {
 
         Pageable pageable = createPageable(page, size, sortBy, sortDir);
@@ -172,7 +172,7 @@ public class ArticleController {
             @RequestParam(defaultValue = "24") @Min(1) @Max(168) int hours,
             @RequestParam(defaultValue = "0") @Min(0) int page,
             @RequestParam(defaultValue = "20") @Min(1) @Max(100) int size,
-            @RequestParam(defaultValue = "publishedDate") String sortBy,
+            @RequestParam(defaultValue = "publishedAt") String sortBy,
             @RequestParam(defaultValue = "desc") String sortDir) {
 
         Pageable pageable = createPageable(page, size, sortBy, sortDir);
@@ -188,7 +188,7 @@ public class ArticleController {
             @PathVariable String category,
             @RequestParam(defaultValue = "0") @Min(0) int page,
             @RequestParam(defaultValue = "20") @Min(1) @Max(100) int size,
-            @RequestParam(defaultValue = "publishedDate") String sortBy,
+            @RequestParam(defaultValue = "publishedAt") String sortBy,
             @RequestParam(defaultValue = "desc") String sortDir) {
 
         Pageable pageable = createPageable(page, size, sortBy, sortDir);
@@ -204,7 +204,7 @@ public class ArticleController {
             @PathVariable NewsSource source,
             @RequestParam(defaultValue = "0") @Min(0) int page,
             @RequestParam(defaultValue = "20") @Min(1) @Max(100) int size,
-            @RequestParam(defaultValue = "publishedDate") String sortBy,
+            @RequestParam(defaultValue = "publishedAt") String sortBy,
             @RequestParam(defaultValue = "desc") String sortDir) {
 
         Pageable pageable = createPageable(page, size, sortBy, sortDir);
@@ -220,7 +220,7 @@ public class ArticleController {
             @RequestParam String keyword,
             @RequestParam(defaultValue = "0") @Min(0) int page,
             @RequestParam(defaultValue = "20") @Min(1) @Max(100) int size,
-            @RequestParam(defaultValue = "publishedDate") String sortBy,
+            @RequestParam(defaultValue = "publishedAt") String sortBy,
             @RequestParam(defaultValue = "desc") String sortDir) {
 
         Pageable pageable = createPageable(page, size, sortBy, sortDir);
