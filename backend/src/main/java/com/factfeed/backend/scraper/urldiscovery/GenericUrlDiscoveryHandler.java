@@ -1,4 +1,4 @@
-package com.factfeed.backend.scraper.UrlDiscovery;
+package com.factfeed.backend.scraper.urldiscovery;
 
 import com.factfeed.backend.db.repository.ArticleRepository;
 import com.factfeed.backend.scraper.model.NewsSource;
@@ -44,5 +44,11 @@ public class GenericUrlDiscoveryHandler extends BaseUrlDiscoveryHandler {
     @Override
     protected List<String> getUrlsAlreadyInDb() {
         return articleRepository.findRecentUrlsBySource(newsSource);
+    }
+
+    @Override
+    protected boolean usesPagination() {
+        // BD Pratidin uses pagination instead of load more buttons
+        return newsSource == NewsSource.BDPROTIDIN;
     }
 }
