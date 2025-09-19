@@ -25,6 +25,7 @@ repositories {
 }
 
 dependencies {
+    implementation("com.google.code.gson:gson:2.13.2")
     implementation("me.paulschwarz:spring-dotenv:4.0.0")
     implementation("org.jsoup:jsoup:1.21.2")
     implementation("org.seleniumhq.selenium:selenium-java:4.35.0")
