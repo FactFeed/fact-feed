@@ -2,17 +2,21 @@ package com.factfeed.backend.ai;
 
 import com.factfeed.backend.model.dto.ArticleLightDTO;
 import com.factfeed.backend.model.dto.SummarizationResponseDTO;
+import com.factfeed.backend.service.ApiUsageService;
 import java.util.ArrayList;
 import java.util.List;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.ai.chat.client.ChatClient;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 
 /**
- * AI service for article summarization and content analysis
+ * AI service for article summarization and content analysis with API usage tracking
  */
-@Service
 @Slf4j
+@Service
+@Transactional
 public class AIService {
 
     private static final String SUMMARIZATION_PROMPT = """
@@ -38,15 +42,29 @@ public class AIService {
             
             JSON Response:""";
     private final ChatClient chatClient;
+    private final ApiUsageService apiUsageService;
+    @Value("${spring.ai.google.genai.model:gemini-2.5-flash}")
+    private String modelName;
 
-    public AIService(ChatClient.Builder builder) {
+    public AIService(ChatClient.Builder builder, ApiUsageService apiUsageService) {
         this.chatClient = builder.build();
+        this.apiUsageService = apiUsageService;
     }
 
     /**
-     * Summarize a single article
+     * Summarize a single article with API usage tracking
      */
     public SummarizationResponseDTO summarizeArticle(ArticleLightDTO article) {
+        String accountKey = "primary"; // Get from configuration or selection service
+
+        // Check rate limits before making request
+        if (!apiUsageService.isRequestAllowed("gemini", accountKey)) {
+            log.warn("Rate limit exceeded for account: {}", accountKey);
+            return SummarizationResponseDTO.failure(article.getId(), article.getTitle(),
+                    "Rate limit exceeded");
+        }
+
+        long startTime = System.currentTimeMillis();
         try {
             log.debug("Summarizing article: {}", article.getTitle());
 
@@ -54,6 +72,9 @@ public class AIService {
                     article.getTitle(),
                     truncateContent(article.getContent())
             );
+
+            // Estimate input tokens (rough approximation: 1 token ≈ 4 characters)
+            int estimatedInputTokens = prompt.length() / 4;
 
             String summary = chatClient
                     .prompt()
@@ -63,10 +84,25 @@ public class AIService {
 
             summary = cleanSummary(summary);
 
+            // Estimate output tokens
+            assert summary != null;
+            int estimatedOutputTokens = summary.length() / 4;
+            long responseTime = System.currentTimeMillis() - startTime;
+
+            // Log API usage
+            apiUsageService.logApiUsage("gemini", accountKey, "summarization", modelName,
+                    estimatedInputTokens, estimatedOutputTokens, responseTime, true, null);
+
             log.info("Successfully summarized article: {}", article.getTitle());
             return SummarizationResponseDTO.success(article.getId(), article.getTitle(), summary);
 
         } catch (Exception e) {
+            long responseTime = System.currentTimeMillis() - startTime;
+
+            // Log failed API usage
+            apiUsageService.logApiUsage("gemini", accountKey, "summarization", modelName,
+                    0, 0, responseTime, false, e.getMessage());
+
             log.error("Error summarizing article {}: {}", article.getTitle(), e.getMessage());
             return SummarizationResponseDTO.failure(article.getId(), article.getTitle(), e.getMessage());
         }
@@ -114,9 +150,20 @@ public class AIService {
     }
 
     /**
-     * Process a small batch of articles with JSON response parsing
+     * Process a small batch of articles with JSON response parsing and API usage tracking
      */
     private List<SummarizationResponseDTO> summarizeArticlesBatch(List<ArticleLightDTO> articles) {
+        String accountKey = apiUsageService.selectBestAccount("gemini");
+
+        // Check rate limits before making request
+        if (!apiUsageService.isRequestAllowed("gemini", accountKey)) {
+            log.warn("Rate limit exceeded for account: {}, falling back to individual processing", accountKey);
+            return articles.stream()
+                    .map(this::summarizeArticle)
+                    .collect(ArrayList::new, ArrayList::add, ArrayList::addAll);
+        }
+
+        long startTime = System.currentTimeMillis();
         try {
             StringBuilder articlesText = new StringBuilder();
             for (ArticleLightDTO article : articles) {
@@ -127,7 +174,10 @@ public class AIService {
                 ));
             }
 
-            String prompt = String.format(BATCH_SUMMARIZATION_PROMPT, articlesText.toString());
+            String prompt = String.format(BATCH_SUMMARIZATION_PROMPT, articlesText);
+
+            // Estimate input tokens
+            int estimatedInputTokens = prompt.length() / 4;
 
             String response = chatClient
                     .prompt()
@@ -135,9 +185,24 @@ public class AIService {
                     .call()
                     .content();
 
+            // Estimate output tokens
+            assert response != null;
+            int estimatedOutputTokens = response.length() / 4;
+            long responseTime = System.currentTimeMillis() - startTime;
+
+            // Log successful API usage
+            apiUsageService.logApiUsage("gemini", accountKey, "batch_summarization", modelName,
+                    estimatedInputTokens, estimatedOutputTokens, responseTime, true, null);
+
             return parseBatchSummarizationResponse(response, articles);
 
         } catch (Exception e) {
+            long responseTime = System.currentTimeMillis() - startTime;
+
+            // Log failed API usage
+            apiUsageService.logApiUsage("gemini", accountKey, "batch_summarization", modelName,
+                    0, 0, responseTime, false, e.getMessage());
+
             log.error("Error in batch summarization: {}", e.getMessage());
             // Fallback to individual processing
             return articles.stream()
