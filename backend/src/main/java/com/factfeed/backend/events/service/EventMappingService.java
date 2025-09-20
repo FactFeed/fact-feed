@@ -17,8 +17,10 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.stream.Collectors;
 import lombok.RequiredArgsConstructor;
@@ -37,15 +39,19 @@ import org.springframework.transaction.annotation.Transactional;
 public class EventMappingService {
 
     private static final String EVENT_MAPPING_PROMPT = """
-            আপনি একজন বাংলা সংবাদ বিশ্লেষক বিশেষজ্ঞ। নিচে দেওয়া সংবাদ নিবন্ধগুলো বিশ্লেষণ করে একই ঘটনা বর্ণনাকারী নিবন্ধগুলোকে গ্রুপ করুন।
+            আপনি একজন বাংলা সংবাদ ক্লাস্টারিং বিশেষজ্ঞ। নিচে দেওয়া সকল সংবাদ নিবন্ধের কীওয়ার্ড-সারসংক্ষেপ বিশ্লেষণ করে একই ঘটনা বর্ণনাকারী নিবন্ধগুলোর ID গুলো গ্রুপ করুন।
             
-            **নির্দেশনা:**
-            1. একই ঘটনা বর্ণনাকারী নিবন্ধগুলো একসাথে গ্রুপ করুন
-            2. প্রতিটি গ্রুপের জন্য একটি সংক্ষিপ্ত কিন্তু বর্ণনামূলক শিরোনাম দিন
-            3. ঘটনার ধরন নির্ধারণ করুন (রাজনীতি, খেলা, অর্থনীতি, সমাজ, আন্তর্জাতিক, ইত্যাদি)
-            4. কেন এই নিবন্ধগুলো একসাথে গ্রুপ করা হয়েছে তার কারণ দিন
-            5. প্রতিটি গ্রুপের জন্য ০.০ থেকে ১.০ পর্যন্ত confidence score দিন
-            6. কমপক্ষে ২টি নিবন্ধ থাকলেই একটি গ্রুপ তৈরি করুন
+            **ক্লাস্টারিং নিয়ম:**
+            1. **একই ব্যক্তি/সংস্থা + একই ধরনের কাজ/ঘটনা** = একই গ্রুপ
+            2. **একই স্থান + একই দিন/সময়ের ঘটনা** = একই গ্রুপ  
+            3. **একই বিষয়/ইস্যু নিয়ে আলোচনা** = একই গ্রুপ
+            4. **সংখ্যাগত তথ্য (মৃত্যু, আহত, অর্থ) একই** = একই গ্রুপ
+            5. প্রতিটি গ্রুপে **কমপক্ষে ২টি** নিবন্ধ থাকতে হবে
+            6. একটি নিবন্ধ **শুধুমাত্র একটি গ্রুপে** থাকবে
+            7. **সব নিবন্ধকে অবশ্যই কোনো না কোনো গ্রুপে** রাখার চেষ্টা করুন
+            8. যদি কোনো নিবন্ধ মিল না হয় তবে সেটাকে সবচেয়ে কাছাকাছি গ্রুপে রাখুন
+            
+            **গ্রুপ শিরোনাম:** মূল ব্যক্তি/সংস্থা + মূল ঘটনা + স্থান (যদি প্রয়োজন)
             
             **Input Articles:** {inputJson}
             
@@ -55,15 +61,13 @@ public class EventMappingService {
                 "eventTitle": "ঘটনার সংক্ষিপ্ত শিরোনাম",
                 "eventType": "ঘটনার ধরন",
                 "confidenceScore": 0.95,
-                "articleIds": [1, 2, 3],
-                "reasoning": "কেন এই নিবন্ধগুলো একসাথে গ্রুপ করা হয়েছে"
+                "articleIds": [1, 2, 3]
               }},
               {{
                 "eventTitle": "আরেকটি ঘটনার শিরোনাম",
                 "eventType": "ঘটনার ধরন",
                 "confidenceScore": 0.87,
-                "articleIds": [4, 5],
-                "reasoning": "গ্রুপিং এর কারণ"
+                "articleIds": [4, 5]
               }}
             ]
             """;
@@ -92,7 +96,7 @@ public class EventMappingService {
     private String apiKey6;
 
     /**
-     * Map all unmapped articles to events using AI clustering
+     * Map all unmapped articles to events using single-batch AI clustering
      */
     @Transactional
     public String mapAllUnmappedArticles() {
@@ -103,58 +107,20 @@ public class EventMappingService {
             return "কোনো নতুন নিবন্ধ ম্যাপিং এর প্রয়োজন নেই";
         }
 
-        int mappedCount = 0;
-        int eventCount = 0;
-        int batchSize = 15; // Process 15 articles per batch for optimal AI clustering
-
-        // Process in batches
-        for (int i = 0; i < unmappedArticles.size(); i += batchSize) {
-            try {
-                int endIndex = Math.min(i + batchSize, unmappedArticles.size());
-                List<Article> batch = unmappedArticles.subList(i, endIndex);
-
-                log.info("🔄 Processing event mapping batch {}/{}: {} articles",
-                        (i / batchSize) + 1,
-                        (unmappedArticles.size() + batchSize - 1) / batchSize,
-                        batch.size());
-
-                List<Event> batchEvents = processArticleBatch(batch);
-                eventCount += batchEvents.size();
-                mappedCount += batch.size();
-
-                // Small delay between batches to respect rate limits
-                Thread.sleep(3000);
-
-            } catch (Exception e) {
-                log.error("❌ Error processing event mapping batch starting at index {}: {}", i, e.getMessage());
-            }
-        }
-
-        String result = String.format("ইভেন্ট ম্যাপিং সম্পন্ন - %d টি নিবন্ধ %d টি ইভেন্টে ম্যাপ করা হয়েছে",
-                mappedCount, eventCount);
-        log.info("📈 Event mapping completed: {}", result);
-        return result;
-    }
-
-    /**
-     * Process a batch of articles and create events with mappings
-     */
-    @Transactional
-    public List<Event> processArticleBatch(List<Article> articles) {
         String apiKeyName = getNextApiKey();
-        log.info("🤖 Processing {} articles for event mapping using key: {}", articles.size(), apiKeyName);
+        log.info("🤖 Processing all {} articles in single batch using key: {}", unmappedArticles.size(), apiKeyName);
 
         try {
-            // Convert articles to mapping format
-            List<ArticleSummaryForMapping> summaries = articles.stream()
+            // Convert all articles to mapping format
+            List<ArticleSummaryForMapping> summaries = unmappedArticles.stream()
                     .map(this::convertToSummaryFormat)
                     .collect(Collectors.toList());
 
-            // Create input JSON
+            // Create input JSON for ALL articles
             String inputJson = objectMapper.writeValueAsString(summaries);
             int tokenCount = estimateTokenCount(inputJson);
 
-            log.debug("📝 Event mapping input created, estimated tokens: {}", tokenCount);
+            log.debug("📝 Single batch input created for {} articles, estimated tokens: {}", unmappedArticles.size(), tokenCount);
 
             // Create prompt and call AI
             PromptTemplate promptTemplate = new PromptTemplate(EVENT_MAPPING_PROMPT);
@@ -168,18 +134,20 @@ public class EventMappingService {
             // Parse AI response into clusters
             List<ArticleCluster> clusters = parseEventMappingResponse(aiResponse);
 
-            // Create events and mappings
-            List<Event> createdEvents = createEventsFromClusters(clusters, articles);
+            // Create events and mappings from the 2D array
+            List<Event> createdEvents = createEventsFromClusters(clusters, unmappedArticles);
 
             // Log successful API usage
-            logApiUsage(apiKeyName, (long) articles.size(), tokenCount, true, null);
+            logApiUsage(apiKeyName, (long) unmappedArticles.size(), tokenCount, true, null);
 
-            log.info("✅ Successfully created {} events from {} articles", createdEvents.size(), articles.size());
-            return createdEvents;
+            String result = String.format("ইভেন্ট ম্যাপিং সম্পন্ন - %d টি নিবন্ধ %d টি ইভেন্টে ম্যাপ করা হয়েছে",
+                    unmappedArticles.size(), createdEvents.size());
+            log.info("📈 Single-batch event mapping completed: {}", result);
+            return result;
 
         } catch (Exception e) {
-            log.error("❌ Error in event mapping: {}", e.getMessage());
-            logApiUsage(apiKeyName, (long) articles.size(), estimateTokenCount("batch"), false, e.getMessage());
+            log.error("❌ Error in single-batch event mapping: {}", e.getMessage());
+            logApiUsage(apiKeyName, (long) unmappedArticles.size(), estimateTokenCount("batch"), false, e.getMessage());
             throw new RuntimeException("ইভেন্ট ম্যাপিং ব্যর্থ: " + e.getMessage(), e);
         }
     }
@@ -250,7 +218,7 @@ public class EventMappingService {
                 cluster.setEventTitle(clusterNode.get("eventTitle").asText());
                 cluster.setEventType(clusterNode.get("eventType").asText());
                 cluster.setConfidenceScore(clusterNode.get("confidenceScore").asDouble());
-                cluster.setReasoning(clusterNode.get("reasoning").asText());
+                // Remove reasoning field since it's not in our simplified prompt
 
                 // Parse article IDs
                 List<Long> articleIds = new ArrayList<>();
@@ -278,11 +246,14 @@ public class EventMappingService {
         Map<Long, Article> articleMap = articles.stream()
                 .collect(Collectors.toMap(Article::getId, article -> article));
 
+        // Track which articles have been clustered
+        Set<Long> clusteredArticleIds = new HashSet<>();
+
         for (ArticleCluster cluster : clusters) {
             try {
-                // Validate cluster has minimum articles
-                if (cluster.getArticleIds().size() < 2) {
-                    log.warn("⚠️ Skipping cluster with less than 2 articles: {}", cluster.getEventTitle());
+                // Accept clusters with 1 or more articles (changed from 2+)
+                if (cluster.getArticleIds().isEmpty()) {
+                    log.warn("⚠️ Skipping empty cluster: {}", cluster.getEventTitle());
                     continue;
                 }
 
@@ -318,6 +289,7 @@ public class EventMappingService {
                                 .build();
 
                         mappingRepository.save(mapping);
+                        clusteredArticleIds.add(articleId); // Track clustered articles
                     } else {
                         log.warn("⚠️ Article with ID {} not found in batch", articleId);
                     }
@@ -331,6 +303,50 @@ public class EventMappingService {
                 log.error("❌ Error creating event from cluster: {}", e.getMessage());
             }
         }
+
+        // Check for unclustered articles and create individual events
+        List<Long> unclusteredIds = articles.stream()
+                .map(Article::getId)
+                .filter(id -> !clusteredArticleIds.contains(id))
+                .collect(Collectors.toList());
+
+        if (!unclusteredIds.isEmpty()) {
+            log.info("📝 Found {} unclustered articles, creating individual events", unclusteredIds.size());
+            
+            for (Long articleId : unclusteredIds) {
+                Article article = articleMap.get(articleId);
+                if (article != null) {
+                    // Create individual event for unclustered article
+                    Event individualEvent = Event.builder()
+                            .title("স্বতন্ত্র সংবাদ: " + article.getTitle().substring(0, Math.min(50, article.getTitle().length())))
+                            .eventType("বিবিধ")
+                            .confidenceScore(0.5) // Lower confidence for individual events
+                            .articleCount(1)
+                            .eventDate(article.getArticlePublishedAt() != null ? 
+                                      article.getArticlePublishedAt() : LocalDateTime.now())
+                            .isProcessed(false)
+                            .build();
+                    
+                    Event savedIndividualEvent = eventRepository.save(individualEvent);
+                    
+                    // Create mapping
+                    ArticleEventMapping individualMapping = ArticleEventMapping.builder()
+                            .article(article)
+                            .event(savedIndividualEvent)
+                            .confidenceScore(0.5)
+                            .mappingMethod("AI_INDIVIDUAL")
+                            .build();
+                    
+                    mappingRepository.save(individualMapping);
+                    createdEvents.add(savedIndividualEvent);
+                    
+                    log.debug("📄 Created individual event for article: {}", article.getTitle().substring(0, Math.min(30, article.getTitle().length())));
+                }
+            }
+        }
+
+        log.info("📊 Clustering Summary: {} clustered events, {} individual events, {} total articles processed", 
+                createdEvents.size() - unclusteredIds.size(), unclusteredIds.size(), articles.size());
 
         return createdEvents;
     }

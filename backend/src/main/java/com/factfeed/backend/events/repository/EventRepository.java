@@ -45,4 +45,16 @@ public interface EventRepository extends JpaRepository<Event, Long> {
 
     @Query("SELECT AVG(e.confidenceScore) FROM Event e WHERE e.isProcessed = true")
     Double getAverageConfidenceScore();
+
+    // Event merging support queries
+    @Query("SELECT e FROM Event e WHERE e.createdAt >= :since AND e.isProcessed = :isProcessed ORDER BY e.createdAt DESC")
+    List<Event> findByCreatedAtAfterAndIsProcessed(@Param("since") LocalDateTime since, @Param("isProcessed") Boolean isProcessed);
+
+    // Count events by creation date and processing status
+    @Query("SELECT COUNT(e) FROM Event e WHERE e.createdAt >= :since AND e.isProcessed = :isProcessed")
+    Long countByCreatedAtAfterAndIsProcessed(@Param("since") LocalDateTime since, @Param("isProcessed") Boolean isProcessed);
+
+    // Find events by type and date range for merge analysis
+    @Query("SELECT e FROM Event e WHERE e.eventType = :eventType AND e.createdAt >= :since AND e.isProcessed = false ORDER BY e.createdAt DESC")
+    List<Event> findUnprocessedEventsByTypeAndDate(@Param("eventType") String eventType, @Param("since") LocalDateTime since);
 }

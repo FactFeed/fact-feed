@@ -38,21 +38,26 @@ public class AggregationService {
             
             **কাজ:**
             1. **সামগ্রিক সারাংশ:** সকল নিবন্ধের তথ্য একত্রিত করে একটি পূর্ণাঙ্গ, নিরপেক্ষ ও তথ্যবহুল সারাংশ তৈরি করুন (১০-১৫ বাক্য)
-            2. **তথ্যগত বিভেদ:** বিভিন্ন উৎসের মধ্যে কোনো তথ্যগত অসঙ্গতি, পরস্পরবিরোধী তথ্য, বা ভিন্ন দৃষ্টিভঙ্গি থাকলে তা উল্লেখ করুন
+            2. **তথ্যগত বিভেদ:** বিভিন্ন উৎসের মধ্যে তথ্যগত অসঙ্গতি থাকলে সুনির্দিষ্টভাবে উল্লেখ করুন
             3. **বিশ্বাসযোগ্যতা স্কোর:** ০.০ থেকে ১.০ এর মধ্যে একটি স্কোর দিন (১.০ = সকল তথ্য সামঞ্জস্যপূর্ণ)
+            
+            **তথ্যগত বিভেদের ফরম্যাট:**
+            - সুনির্দিষ্ট তথ্য সহ উৎসের নাম উল্লেখ করুন
+            - উদাহরণ: "মৃতের সংখ্যা নিয়ে মতভেদ - প্রথম আলো: ২ জন, সমকাল: ১ জন"
+            - উদাহরণ: "সময় নিয়ে বিভেদ - কালের কণ্ঠ: সকাল ১০টা, জনকণ্ঠ: সকাল ১১টা"
+            - কোনো বিভেদ না থাকলে: "কোনো উল্লেখযোগ্য তথ্যগত বিভেদ পাওয়া যায়নি"
             
             **নির্দেশনা:**
             - সকল গুরুত্বপূর্ণ তথ্য, তারিখ, সংখ্যা, নাম অন্তর্ভুক্ত করুন
             - কোনো নির্দিষ্ট সংবাদপত্রের পক্ষপাতিত্ব করবেন না
-            - তথ্যগত বিভেদ থাকলে কোন উৎস কী বলেছে তা স্পষ্ট করুন
-            - যদি কোনো বিভেদ না থাকে, "কোনো উল্লেখযোগ্য তথ্যগত বিভেদ পাওয়া যায়নি" লিখুন
+            - পরস্পরবিরোধী তথ্যগুলো স্পষ্টভাবে তুলে ধরুন
             
             **Input Articles:** {inputJson}
             
             অবশ্যই এই exact JSON format এ উত্তর দিন:
             {{
               "aggregatedSummary": "সকল তথ্য একত্রিত করে তৈরি সামগ্রিক সারাংশ (১০-১৫ বাক্য)",
-              "discrepancies": "তথ্যগত বিভেদের বিস্তারিত বিবরণ বা 'কোনো উল্লেখযোগ্য তথ্যগত বিভেদ পাওয়া যায়নি'",
+              "discrepancies": "তথ্যগত বিভেদের বিস্তারিত বিবরণ (উৎস সহ) বা 'কোনো উল্লেখযোগ্য তথ্যগত বিভেদ পাওয়া যায়নি'",
               "confidenceScore": 0.92,
               "methodology": "কীভাবে এই বিশ্লেষণ করা হয়েছে তার সংক্ষিপ্ত বিবরণ"
             }}
@@ -94,19 +99,27 @@ public class AggregationService {
 
         int processedCount = 0;
         int errorCount = 0;
+        int skippedCount = 0;
 
         for (Event event : unprocessedEvents) {
             try {
-                log.info("🔄 Processing event: {} (ID: {})", event.getTitle(), event.getId());
+                log.info("🔄 Processing event: {} (ID: {}, Articles: {})", 
+                        event.getTitle(), event.getId(), event.getArticleCount());
 
-                AggregationResult result = processEventAggregation(event);
-                updateEventWithAggregation(event, result);
-
-                processedCount++;
-                log.info("✅ Successfully processed event: {}", event.getTitle());
+                // Handle single-article events differently
+                if (event.getArticleCount() == 1) {
+                    processSingleArticleEvent(event);
+                    processedCount++;
+                    log.info("✅ Processed single-article event: {}", event.getTitle());
+                } else {
+                    AggregationResult result = processEventAggregation(event);
+                    updateEventWithAggregation(event, result);
+                    processedCount++;
+                    log.info("✅ Successfully processed multi-article event: {}", event.getTitle());
+                }
 
                 // Small delay between events to respect rate limits
-                Thread.sleep(2000);
+                Thread.sleep(1000); // Reduced delay for faster processing
 
             } catch (Exception e) {
                 log.error("❌ Error processing event {}: {}", event.getId(), e.getMessage());
@@ -114,10 +127,33 @@ public class AggregationService {
             }
         }
 
-        String result = String.format("এগ্রিগেশন সম্পন্ন - সফল: %d, ব্যর্থ: %d",
-                processedCount, errorCount);
+        String result = String.format("এগ্রিগেশন সম্পন্ন - সফল: %d, ব্যর্থ: %d, এড়ানো: %d",
+                processedCount, errorCount, skippedCount);
         log.info("📈 Event aggregation completed: {}", result);
         return result;
+    }
+
+    /**
+     * Process single-article events (no aggregation needed)
+     */
+    @Transactional
+    public void processSingleArticleEvent(Event event) {
+        List<Article> articles = mappingRepository.findArticlesByEvent(event);
+        
+        if (articles.size() == 1) {
+            Article article = articles.get(0);
+            
+            // Use the article's summarized content as aggregated summary
+            event.setAggregatedSummary("একক সংবাদ: " + 
+                (article.getSummarizedContent() != null ? article.getSummarizedContent() : article.getTitle()));
+            event.setDiscrepancies("কোনো উল্লেখযোগ্য তথ্যগত বিভেদ পাওয়া যায়নি (একক সংবাদ)");
+            event.setConfidenceScore(0.8); // Good confidence for single article
+            event.setIsProcessed(true);
+            event.setUpdatedAt(LocalDateTime.now());
+            
+            eventRepository.save(event);
+            log.debug("💾 Updated single-article event {} with basic aggregation", event.getId());
+        }
     }
 
     /**

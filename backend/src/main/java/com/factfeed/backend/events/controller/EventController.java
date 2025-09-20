@@ -84,19 +84,19 @@ public class EventController {
     }
 
     /**
-     * Run complete pipeline: mapping + aggregation
+     * Run complete pipeline: single-batch mapping + aggregation
      */
     @PostMapping("/process-all")
     public ResponseEntity<Map<String, Object>> processCompleteWorkflow() {
         log.info("🚀 Starting complete event processing pipeline");
 
         try {
-            // Step 1: Event Mapping
-            log.info("📍 Step 1: Event Mapping");
+            // Step 1: Single-Batch Event Mapping
+            log.info("📍 Step 1: Single-Batch Event Mapping");
             String mappingResult = eventMappingService.mapAllUnmappedArticles();
 
-            // Step 2: Event Aggregation
-            log.info("📍 Step 2: Event Aggregation");
+            // Step 2: Event Aggregation with Source-Specific Discrepancy Detection
+            log.info("📍 Step 2: Event Aggregation with Source Analysis");
             String aggregationResult = aggregationService.processAllUnprocessedEvents();
 
             return ResponseEntity.ok(Map.of(
