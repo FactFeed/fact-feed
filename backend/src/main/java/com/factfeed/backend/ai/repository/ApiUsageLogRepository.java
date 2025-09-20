@@ -21,4 +21,19 @@ public interface ApiUsageLogRepository extends JpaRepository<ApiUsageLog, Long> 
 
     @Query("SELECT a FROM ApiUsageLog a WHERE a.success = false ORDER BY a.usedAt DESC")
     List<ApiUsageLog> findFailedOperations();
+
+    @Query("SELECT COUNT(a) FROM ApiUsageLog a WHERE a.operation = :operation AND a.usedAt >= :since")
+    Long countOperationUsageSince(@Param("operation") String operation, @Param("since") LocalDateTime since);
+
+    @Query("SELECT SUM(a.tokenCount) FROM ApiUsageLog a WHERE a.operation = :operation AND a.usedAt >= :since")
+    Long sumTokensByOperationSince(@Param("operation") String operation, @Param("since") LocalDateTime since);
+
+    @Query("SELECT a FROM ApiUsageLog a WHERE a.operation = :operation ORDER BY a.usedAt DESC")
+    List<ApiUsageLog> findByOperationOrderByUsedAtDesc(@Param("operation") String operation);
+
+    @Query("SELECT DISTINCT a.operation FROM ApiUsageLog a")
+    List<String> findDistinctOperations();
+
+    @Query("SELECT DISTINCT a.apiKeyName FROM ApiUsageLog a")
+    List<String> findDistinctApiKeyNames();
 }

@@ -33,15 +33,15 @@ public class SummarizationService {
 
     // Bangla-specific prompt template for batch processing
     private static final String BANGLA_BATCH_SUMMARIZATION_PROMPT = """
-            আপনি একটি বাংলা সংবাদ সারসংক্ষেপ বিশেষজ্ঞ। নিচের JSON format এ দেওয়া সংবাদ নিবন্ধগুলো পড়ুন এবং প্রতিটির জন্য একটি বিস্তৃত, তথ্যবহুল সারাংশ তৈরি করুন।
+            আপনি একটি বাংলা সংবাদ কীওয়ার্ড এক্সট্র্যাক্টর। নিচের JSON format এ দেওয়া সংবাদ নিবন্ধগুলো পড়ুন এবং প্রতিটির জন্য অত্যন্ত সংক্ষিপ্ত কীওয়ার্ড-ভিত্তিক সারাংশ তৈরি করুন।
             
             **গুরুত্বপূর্ণ নির্দেশনা:**
-            1. অবশ্যই বাংলায় সারাংশ লিখুন
-            2. মূল সংবাদের সকল গুরুত্বপূর্ণ বিষয় এবং প্রধান তথ্যগুলো রাখুন
-            3. ৫-৮ বাক্যের মধ্যে বিস্তৃত সারাংশ লিখুন
-            4. তারিখ, সংখ্যা, নাম এবং গুরুত্বপূর্ণ বিবরণ অবশ্যই রাখুন
+            1. অবশ্যই বাংলায় একটি লাইনে সারাংশ লিখুন (সর্বোচ্চ ১৫-২০ শব্দ)
+            2. শুধুমাত্র মূল কীওয়ার্ড, নাম, স্থান, সংখ্যা, ঘটনার ধরণ রাখুন
+            3. অপ্রয়োজনীয় শব্দ, বাক্য গঠন বাদ দিন
+            4. ফর্ম্যাট: "ব্যক্তি/সংস্থার নাম + মূল ঘটনা + স্থান + সংখ্যা/তারিখ"
             5. **কোনোভাবেই কোনো article এর id এবং title পরিবর্তন করবেন না**
-            6. প্রতিটি নিবন্ধের জন্য আলাদা সারাংশ তৈরি করুন
+            6. উদাহরণ: "প্রধানমন্ত্রী শেখ হাসিনা ঢাকায় অর্থনৈতিক উন্নয়ন বিষয়ক বৈঠক"
             
             Input Articles: {inputJson}
             
@@ -50,12 +50,12 @@ public class SummarizationService {
               {{
                 "id": [original_id_unchanged],
                 "title": "[original_title_unchanged]",
-                "summarizedContent": "[বাংলায় ৫-৮ বাক্যের বিস্তৃত সারাংশ]"
+                "summarizedContent": "[কীওয়ার্ড-ভিত্তিক একলাইন সারাংশ (১৫-২০ শব্দ)]"
               }},
               {{
                 "id": [original_id_unchanged],
                 "title": "[original_title_unchanged]",
-                "summarizedContent": "[বাংলায় ৫-৮ বাক্যের বিস্তৃত সারাংশ]"
+                "summarizedContent": "[কীওয়ার্ড-ভিত্তিক একলাইন সারাংশ (১৫-২০ শব্দ)]"
               }}
             ]
             """;
@@ -167,7 +167,7 @@ public class SummarizationService {
 
         int successCount = 0;
         int errorCount = 0;
-        int batchSize = 5; // Process 5 articles per batch to optimize API usage
+        int batchSize = 20; // Process 20 articles per batch to optimize API usage
 
         // Process in batches
         for (int i = 0; i < unsummarizedArticles.size(); i += batchSize) {

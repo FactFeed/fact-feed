@@ -165,6 +165,27 @@ public class ArticleExtractor {
     }
 
     private String extractContent(JsonObject obj, NewsSource source, Document doc) {
+        // For Samakal, always use HTML extraction as primary method since JSON-LD is always truncated
+        if (source == NewsSource.SAMAKAL) {
+            String htmlContent = extractSamakalContentFromHtml(doc);
+            if (htmlContent != null && !htmlContent.isEmpty()) {
+                return htmlContent;
+            }
+            // Fallback to JSON-LD if HTML extraction fails
+            log.warn("Samakal HTML extraction failed, falling back to truncated JSON-LD content");
+        }
+
+        // For Jugantor, always use HTML extraction as primary method since content is loaded via AJAX
+        if (source == NewsSource.JUGANTOR) {
+            String htmlContent = extractJugantorContentFromHtml(doc);
+            if (htmlContent != null && !htmlContent.isEmpty()) {
+                return htmlContent;
+            }
+            // Fallback to JSON-LD if HTML extraction fails
+            log.warn("Jugantor HTML extraction failed, falling back to JSON-LD description");
+        }
+
+        // For other sources, use JSON-LD as primary method
         String[] contentFields = getContentFields(source);
         String content = null;
 
@@ -201,6 +222,45 @@ public class ArticleExtractor {
     }
 
     private String extractDescription(JsonObject obj, NewsSource source, Document doc) {
+        // For Samakal, always use HTML extraction as primary method since JSON-LD description is often truncated
+        if (source == NewsSource.SAMAKAL) {
+            String htmlContent = extractSamakalContentFromHtml(doc);
+            if (htmlContent != null && !htmlContent.isEmpty()) {
+                // Use first paragraph as description
+                String[] paragraphs = htmlContent.split("\n\n");
+                if (paragraphs.length > 0) {
+                    String description = paragraphs[0].trim();
+                    // Limit description to first 200 characters
+                    if (description.length() > 200) {
+                        description = description.substring(0, 200) + "...";
+                    }
+                    return description;
+                }
+            }
+            // Fallback to JSON-LD if HTML extraction fails
+            log.warn("Samakal HTML extraction failed for description, falling back to JSON-LD");
+        }
+
+        // For Jugantor, always use HTML extraction as primary method since JSON-LD description is often brief
+        if (source == NewsSource.JUGANTOR) {
+            String htmlContent = extractJugantorContentFromHtml(doc);
+            if (htmlContent != null && !htmlContent.isEmpty()) {
+                // Use first paragraph as description
+                String[] paragraphs = htmlContent.split("\n\n");
+                if (paragraphs.length > 0) {
+                    String description = paragraphs[0].trim();
+                    // Limit description to first 200 characters
+                    if (description.length() > 200) {
+                        description = description.substring(0, 200) + "...";
+                    }
+                    return description;
+                }
+            }
+            // Fallback to JSON-LD if HTML extraction fails
+            log.warn("Jugantor HTML extraction failed for description, falling back to JSON-LD");
+        }
+
+        // For other sources, use JSON-LD as primary method
         String description = null;
         if (obj.has("description")) {
             description = obj.get("description").getAsString();
@@ -547,6 +607,135 @@ public class ArticleExtractor {
 
         } catch (Exception e) {
             log.error("❌ Error extracting BD Pratidin content from HTML <article>: {}", e.getMessage());
+            return null;
+        }
+    }
+
+    /**
+     * Extract content from Samakal's HTML when JSON-LD is truncated
+     * Uses .dNewsDesc#contentDetails > p selector to get full article content
+     */
+    private String extractSamakalContentFromHtml(Document doc) {
+        if (doc == null) {
+            return null;
+        }
+
+        try {
+            // Select the content div using both class and id for precision
+            Elements contentElements = doc.select("div.dNewsDesc#contentDetails");
+            if (contentElements.isEmpty()) {
+                // Fallback to just class selector
+                contentElements = doc.select(".dNewsDesc");
+                if (contentElements.isEmpty()) {
+                    // Try alternative selectors that might exist on Samakal
+                    contentElements = doc.select("div[id*=content], div[class*=content], div[class*=article]");
+                    if (contentElements.isEmpty()) {
+                        log.debug("No content element found for Samakal HTML extraction");
+                        return null;
+                    }
+                    log.debug("Using fallback selector for Samakal content extraction");
+                }
+            }
+
+            Element contentDiv = contentElements.first();
+
+            // Extract all paragraph elements within the content div, excluding ads
+            Elements paragraphs = contentDiv.select("p");
+            if (paragraphs.isEmpty()) {
+                log.debug("No <p> elements found in content div for Samakal");
+                return null;
+            }
+
+            StringBuilder content = new StringBuilder();
+            int validParagraphs = 0;
+            for (Element paragraph : paragraphs) {
+                String text = paragraph.text().trim();
+                // Skip empty paragraphs and ad-related content
+                if (!text.isEmpty() &&
+                        !text.toLowerCase().contains("googletag") &&
+                        !text.toLowerCase().contains("advertisement") &&
+                        !text.toLowerCase().contains("div-gpt-ad") &&
+                        text.length() > 10) { // Skip very short paragraphs that might be ads/metadata
+                    content.append(text).append("\n\n");
+                    validParagraphs++;
+                }
+            }
+
+            String extractedContent = content.toString().trim();
+            if (extractedContent.isEmpty()) {
+                log.warn("No valid content extracted from Samakal HTML paragraphs (found {} total paragraphs)", paragraphs.size());
+                return null;
+            }
+
+            log.info("✅ Samakal HTML extraction: {} characters from {} valid paragraphs (out of {} total)",
+                    extractedContent.length(), validParagraphs, paragraphs.size());
+            return extractedContent;
+
+        } catch (Exception e) {
+            log.error("❌ Error extracting Samakal content from HTML: {}", e.getMessage());
+            return null;
+        }
+    }
+
+    /**
+     * Extract content from Jugantor's HTML when JSON-LD doesn't include articleBody
+     * Uses .desktopDetailBody > p selector to get full article content
+     */
+    private String extractJugantorContentFromHtml(Document doc) {
+        if (doc == null) {
+            return null;
+        }
+
+        try {
+            // Select the content div using the desktop detail body class
+            Elements contentElements = doc.select(".desktopDetailBody");
+            if (contentElements.isEmpty()) {
+                // Try alternative selectors that might exist on Jugantor
+                contentElements = doc.select("div[class*=detail], div[class*=content], div[class*=body]");
+                if (contentElements.isEmpty()) {
+                    log.debug("No .desktopDetailBody element found for Jugantor HTML extraction");
+                    return null;
+                }
+                log.debug("Using fallback selector for Jugantor content extraction");
+            }
+
+            Element contentDiv = contentElements.first();
+
+            // Extract all paragraph elements within the content div
+            Elements paragraphs = contentDiv.select("p");
+            if (paragraphs.isEmpty()) {
+                log.debug("No <p> elements found in .desktopDetailBody for Jugantor");
+                return null;
+            }
+
+            StringBuilder content = new StringBuilder();
+            int validParagraphs = 0;
+            for (Element paragraph : paragraphs) {
+                String text = paragraph.text().trim();
+                // Skip empty paragraphs and ad-related content
+                if (!text.isEmpty() &&
+                        !text.toLowerCase().contains("googletag") &&
+                        !text.toLowerCase().contains("advertisement") &&
+                        !text.toLowerCase().contains("div-gpt-ad") &&
+                        !text.toLowerCase().contains("loadajaxdetail") &&
+                        text.length() > 10) { // Skip very short paragraphs that might be ads/metadata
+                    content.append(text).append("\n\n");
+                    validParagraphs++;
+                }
+            }
+
+            String extractedContent = content.toString().trim();
+            if (extractedContent.isEmpty()) {
+                log.warn("No valid content extracted from Jugantor HTML paragraphs (found {} total paragraphs)", paragraphs.size());
+                return null;
+            }
+
+            log.info("✅ Jugantor HTML extraction: {} characters from {} valid paragraphs (out of {} total)",
+                    extractedContent.length(), validParagraphs, paragraphs.size());
+            return extractedContent;
+
+        } catch (Exception e) {
+            log.error("❌ Error extracting Jugantor content from HTML: {}", e.getMessage());
             return null;
         }
     }
