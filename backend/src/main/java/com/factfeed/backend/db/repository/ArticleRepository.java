@@ -12,4 +12,7 @@ import org.springframework.stereotype.Repository;
 public interface ArticleRepository extends JpaRepository<Article, Long> {
     @Query("SELECT a.url FROM Article a WHERE a.source = :source ORDER BY a.articlePublishedAt DESC LIMIT 10")
     List<String> findRecentUrlsBySource(@Param("source") NewsSource source);
+
+    @Query("SELECT a.url FROM Article a WHERE a.url IN :urls")
+    List<String> findExistingUrls(@Param("urls") List<String> urls);
 }
