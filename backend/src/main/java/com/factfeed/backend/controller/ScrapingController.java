@@ -180,7 +180,7 @@ public class ScrapingController {
                 Map<String, Object> errorResponse = new HashMap<>();
                 errorResponse.put("success", false);
                 errorResponse.put("error", "Article not found");
-                return ResponseEntity.notFound().build();
+                return ResponseEntity.status(404).body(errorResponse);
             }
 
             Article article = articleOpt.get();
@@ -207,7 +207,7 @@ public class ScrapingController {
             Map<String, Object> errorResponse = new HashMap<>();
             errorResponse.put("success", false);
             errorResponse.put("error", e.getMessage());
-            return ResponseEntity.ok(errorResponse);
+            return ResponseEntity.status(500).body(errorResponse);
         }
     }
 }

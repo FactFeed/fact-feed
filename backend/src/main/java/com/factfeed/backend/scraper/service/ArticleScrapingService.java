@@ -4,26 +4,37 @@ import com.factfeed.backend.db.entity.Article;
 import com.factfeed.backend.db.repository.ArticleRepository;
 import com.factfeed.backend.scraper.config.ArticleExtractor;
 import com.factfeed.backend.scraper.model.NewsSource;
+import jakarta.annotation.PreDestroy;
 import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
+import java.util.concurrent.TimeUnit;
 import java.util.stream.Collectors;
-import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 @Service
-@RequiredArgsConstructor
 @Slf4j
 public class ArticleScrapingService {
 
     private final ArticleRepository articleRepository;
     private final ArticleExtractor articleExtractor;
-    private final ExecutorService executorService = Executors.newFixedThreadPool(10);
+    private final ExecutorService executorService;
+
+    public ArticleScrapingService(
+            ArticleRepository articleRepository,
+            ArticleExtractor articleExtractor,
+            @Value("${article.scraping.thread-pool-size:10}") int threadPoolSize) {
+        this.articleRepository = articleRepository;
+        this.articleExtractor = articleExtractor;
+        this.executorService = Executors.newFixedThreadPool(threadPoolSize);
+        log.info("📊 Initialized article scraping service with thread pool size: {}", threadPoolSize);
+    }
 
     @Transactional
     public List<Article> scrapeArticlesFromUrls(List<String> urls, NewsSource source) {
@@ -105,7 +116,24 @@ public class ArticleScrapingService {
         }
     }
 
+    @PreDestroy
     public void shutdown() {
+        log.info("🔄 Shutting down article scraping executor service...");
         executorService.shutdown();
+        try {
+            if (!executorService.awaitTermination(30, TimeUnit.SECONDS)) {
+                log.warn("⚠️ Executor did not terminate gracefully, forcing shutdown...");
+                executorService.shutdownNow();
+                if (!executorService.awaitTermination(10, TimeUnit.SECONDS)) {
+                    log.error("❌ Executor did not terminate even after force shutdown");
+                }
+            } else {
+                log.info("✅ Article scraping executor service shut down gracefully");
+            }
+        } catch (InterruptedException e) {
+            log.warn("⚠️ Shutdown interrupted, forcing immediate shutdown...");
+            executorService.shutdownNow();
+            Thread.currentThread().interrupt();
+        }
     }
 }

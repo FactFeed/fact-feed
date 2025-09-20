@@ -29,9 +29,6 @@ public class ArticleExtractor {
     private static final String USER_AGENT = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/140.0.0.0 Safari/537.36";
     private final Gson gson = new Gson();
 
-    // ThreadLocal to store current document for HTML fallback extraction
-    private final ThreadLocal<Document> currentDocument = new ThreadLocal<>();
-
     public ExtractedArticle extractArticle(String url, NewsSource source) {
         try {
             // Fetch the HTML document
@@ -54,9 +51,6 @@ public class ArticleExtractor {
      * Extract article data from JSON-LD structured data
      */
     private ExtractedArticle extractFromJsonLd(Document doc, String pageUrl, NewsSource source) {
-        // Store document in ThreadLocal for HTML fallback extraction
-        currentDocument.set(doc);
-
         try {
             // Try both standard JSON-LD and regular JSON script tags
             String[] scriptSelectors = {
@@ -75,11 +69,11 @@ public class ArticleExtractor {
                         // Handle both array and object
                         if (parsed.isJsonArray()) {
                             for (JsonElement el : parsed.getAsJsonArray()) {
-                                ExtractedArticle article = parseArticleJson(el, pageUrl, source);
+                                ExtractedArticle article = parseArticleJson(el, pageUrl, source, doc);
                                 if (article != null) return article;
                             }
                         } else {
-                            ExtractedArticle article = parseArticleJson(parsed, pageUrl, source);
+                            ExtractedArticle article = parseArticleJson(parsed, pageUrl, source, doc);
                             if (article != null) return article;
                         }
                     } catch (Exception e) {
@@ -91,13 +85,13 @@ public class ArticleExtractor {
 
             log.warn("No valid JSON-LD article found for: {}", pageUrl);
             return null; // No article found in JSON-LD
-        } finally {
-            // Clean up ThreadLocal to prevent memory leaks
-            currentDocument.remove();
+        } catch (Exception e) {
+            log.error("Error extracting from JSON-LD: {}", e.getMessage());
+            return null;
         }
     }
 
-    private ExtractedArticle parseArticleJson(JsonElement el, String fallbackUrl, NewsSource source) {
+    private ExtractedArticle parseArticleJson(JsonElement el, String fallbackUrl, NewsSource source, Document doc) {
         if (!el.isJsonObject()) return null;
         JsonObject obj = el.getAsJsonObject();
 
@@ -110,11 +104,11 @@ public class ArticleExtractor {
             String url = obj.has("url") ? obj.get("url").getAsString() : fallbackUrl;
             String title = extractTitle(obj, source);
             String author = extractAuthor(obj, source);
-            String content = extractContent(obj, source);
+            String content = extractContent(obj, source, doc);
             String category = extractCategory(obj, source);
             String tags = extractTags(obj, source);
             String imageUrl = extractImageUrl(obj, source);
-            String description = extractDescription(obj, source);
+            String description = extractDescription(obj, source, doc);
 
             LocalDateTime publishedAt = parseJsonLdDate(obj, "datePublished");
             LocalDateTime updatedAt = parseJsonLdDate(obj, "dateModified");
@@ -170,7 +164,7 @@ public class ArticleExtractor {
         return null;
     }
 
-    private String extractContent(JsonObject obj, NewsSource source) {
+    private String extractContent(JsonObject obj, NewsSource source, Document doc) {
         String[] contentFields = getContentFields(source);
         String content = null;
 
@@ -183,7 +177,7 @@ public class ArticleExtractor {
 
         // For BD Pratidin, check if JSON-LD content is truncated and fallback to HTML
         if (source == NewsSource.BDPROTIDIN && (content == null || content.trim().endsWith("..."))) {
-            String htmlContent = extractBdProtidnContentFromHtml();
+            String htmlContent = extractBdProtidnContentFromHtml(doc);
             if (htmlContent != null && !htmlContent.isEmpty()) {
                 return htmlContent;
             }
@@ -206,7 +200,7 @@ public class ArticleExtractor {
         return null;
     }
 
-    private String extractDescription(JsonObject obj, NewsSource source) {
+    private String extractDescription(JsonObject obj, NewsSource source, Document doc) {
         String description = null;
         if (obj.has("description")) {
             description = obj.get("description").getAsString();
@@ -214,7 +208,7 @@ public class ArticleExtractor {
 
         // For BD Pratidin, check if JSON-LD description is truncated and fallback to HTML
         if (source == NewsSource.BDPROTIDIN && (description == null || description.trim().endsWith("..."))) {
-            String htmlContent = extractBdProtidnContentFromHtml();
+            String htmlContent = extractBdProtidnContentFromHtml(doc);
             if (htmlContent != null && !htmlContent.isEmpty()) {
                 // Use first paragraph as description
                 String[] paragraphs = htmlContent.split("\n\n");
@@ -257,6 +251,16 @@ public class ArticleExtractor {
                 return parseBdProtidnDate(dateStr);
             }
 
+            // Handle Samakal's date format: "2025-09-19 07:42:32"
+            if (dateStr.matches("\\d{4}-\\d{2}-\\d{2} \\d{2}:\\d{2}:\\d{2}")) {
+                try {
+                    DateTimeFormatter samakalFormatter = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss");
+                    return LocalDateTime.parse(dateStr, samakalFormatter);
+                } catch (DateTimeParseException e) {
+                    log.debug("Failed to parse Samakal date format: {}", dateStr);
+                }
+            }
+
             // Try different date formats based on common patterns
             DateTimeFormatter[] formatters = {
                     DateTimeFormatter.ISO_OFFSET_DATE_TIME,     // 2024-12-16T16:34:07+06:00
@@ -289,11 +293,11 @@ public class ArticleExtractor {
     }
 
     /**
-     * Parse BD Pratidin's specific date format: "03:12 AM, September 2025, Saturday"
+     * Parse BD Pratidin's specific date format: "03:12 AM, September 25, Saturday" or "03:12 AM, September 2025, Saturday"
      */
     private LocalDateTime parseBdProtidnDate(String dateStr) {
         try {
-            // Split the date string: "03:12 AM, September 2025, Saturday"
+            // Split the date string: "03:12 AM, September 25, Saturday" or "03:12 AM, September 2025, Saturday"
             String[] parts = dateStr.split(", ");
             if (parts.length != 3) {
                 log.debug("Unexpected BD Pratidin date format: {}", dateStr);
@@ -301,23 +305,76 @@ public class ArticleExtractor {
             }
 
             String timePart = parts[0];        // "03:12 AM"
-            String monthYearPart = parts[1];   // "September 2025"
+            String monthDayOrYearPart = parts[1];   // "September 25" or "September 2025"
             String dayPart = parts[2];         // "Saturday"
 
-            // Parse month and year
-            String[] monthYear = monthYearPart.split(" ");
-            if (monthYear.length != 2) {
-                log.debug("Could not parse month/year from: {}", monthYearPart);
+            // Parse month and day/year
+            String[] monthDayOrYear = monthDayOrYearPart.split(" ");
+            if (monthDayOrYear.length != 2) {
+                log.debug("Could not parse month/day/year from: {}", monthDayOrYearPart);
                 return LocalDateTime.now();
             }
 
-            String monthName = monthYear[0];
-            int year = Integer.parseInt(monthYear[1]);
+            String monthName = monthDayOrYear[0];
+            String secondPart = monthDayOrYear[1];
 
-            // Convert month name to number
             int month = getMonthNumber(monthName);
             if (month == -1) {
                 log.debug("Unknown month name: {}", monthName);
+                return LocalDateTime.now();
+            }
+
+            int dayOfMonth = -1;
+            int year = -1;
+
+            // Try to parse day or year
+            if (secondPart.matches("\\d{1,2}")) {
+                // Format: "September 25" - day is provided
+                dayOfMonth = Integer.parseInt(secondPart);
+                year = LocalDateTime.now().getYear(); // Use current year
+            } else if (secondPart.matches("\\d{4}")) {
+                // Format: "September 2025" - year is provided, day is missing
+                year = Integer.parseInt(secondPart);
+                // Since day is missing, we need to estimate it
+                // For news articles, use current day or yesterday if time suggests previous day
+                LocalDateTime now = LocalDateTime.now();
+                dayOfMonth = now.getDayOfMonth();
+
+                // Parse time to see if it suggests a previous day
+                String[] timeAmPm = timePart.split(" ");
+                if (timeAmPm.length == 2) {
+                    String[] hourMin = timeAmPm[0].split(":");
+                    if (hourMin.length == 2) {
+                        try {
+                            int hour = Integer.parseInt(hourMin[0]);
+                            String amPm = timeAmPm[1];
+
+                            // Convert to 24-hour format for comparison
+                            if ("AM".equals(amPm) && hour == 12) {
+                                hour = 0;
+                            } else if ("PM".equals(amPm) && hour != 12) {
+                                hour += 12;
+                            }
+
+                            // If it's early morning and current time is later in the day,
+                            // article might be from yesterday
+                            if (hour < 6 && now.getHour() > 12) {
+                                dayOfMonth = now.minusDays(1).getDayOfMonth();
+                                // Handle month rollover
+                                if (dayOfMonth > now.getDayOfMonth()) {
+                                    month = now.minusDays(1).getMonthValue();
+                                    year = now.minusDays(1).getYear();
+                                }
+                            }
+                        } catch (NumberFormatException e) {
+                            // Fall back to current day
+                        }
+                    }
+                }
+                log.debug("BD Pratidin date missing day, estimated: day={}, month={}, year={}",
+                        dayOfMonth, month, year);
+            } else {
+                log.debug("Could not parse day/year from: {}", secondPart);
                 return LocalDateTime.now();
             }
 
@@ -344,10 +401,6 @@ public class ArticleExtractor {
             } else if ("PM".equals(amPm) && hour != 12) {
                 hour += 12;
             }
-
-            // Since BD Pratidin doesn't provide the day of month, use current day
-            // This is a reasonable assumption for news articles (published today)
-            int dayOfMonth = LocalDateTime.now().getDayOfMonth();
 
             LocalDateTime parsed = LocalDateTime.of(year, month, dayOfMonth, hour, minute);
             log.debug("Successfully parsed BD Pratidin date: {} -> {}", dateStr, parsed);
@@ -457,8 +510,7 @@ public class ArticleExtractor {
     /**
      * Extract content from BD Pratidin's HTML <article> tag when JSON-LD is truncated
      */
-    private String extractBdProtidnContentFromHtml() {
-        Document doc = currentDocument.get();
+    private String extractBdProtidnContentFromHtml(Document doc) {
         if (doc == null) {
             return null;
         }
