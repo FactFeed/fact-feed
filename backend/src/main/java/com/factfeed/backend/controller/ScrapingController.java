@@ -109,6 +109,7 @@ public class ScrapingController {
         int totalUrlsDiscovered = 0;
         int totalArticlesScraped = 0;
         int successfulSources = 0;
+        List<String> failedSources = new ArrayList<>();
 
         for (NewsSource source : NewsSource.values()) {
             try {
@@ -124,8 +125,16 @@ public class ScrapingController {
                 // Track results
                 totalUrlsDiscovered += discoveredUrls.size();
                 totalArticlesScraped += scrapedArticles.size();
-                if (scrapedArticles.size() > 0) {
+                
+                boolean isSuccessful = scrapedArticles.size() > 0;
+                if (isSuccessful) {
                     successfulSources++;
+                    log.info("✅ {} - URLs: {}, Articles: {}", source.getDisplayName(),
+                            discoveredUrls.size(), scrapedArticles.size());
+                } else {
+                    failedSources.add(source.getDisplayName());
+                    log.warn("⚠️ {} - URLs: {}, Articles: {} (NO ARTICLES SCRAPED)", source.getDisplayName(),
+                            discoveredUrls.size(), scrapedArticles.size());
                 }
 
                 // Add to results
@@ -134,14 +143,12 @@ public class ScrapingController {
                 sourceResult.put("sourceName", source.getDisplayName());
                 sourceResult.put("urlsDiscovered", discoveredUrls.size());
                 sourceResult.put("articlesScraped", scrapedArticles.size());
-                sourceResult.put("success", true);
+                sourceResult.put("success", isSuccessful);
                 sourceResults.add(sourceResult);
-
-                log.info("✅ {} - URLs: {}, Articles: {}", source.getDisplayName(),
-                        discoveredUrls.size(), scrapedArticles.size());
 
             } catch (Exception e) {
                 log.error("❌ Error processing source {}: {}", source.getDisplayName(), e.getMessage());
+                failedSources.add(source.getDisplayName() + " (ERROR: " + e.getMessage() + ")");
 
                 Map<String, Object> sourceResult = new HashMap<>();
                 sourceResult.put("sourceCode", source.name());
@@ -166,8 +173,13 @@ public class ScrapingController {
         overallResponse.put("endTime", endTime);
         overallResponse.put("sourceResults", sourceResults);
 
-        log.info("🎯 Full scraping completed - URLs: {}, Articles: {}, Successful sources: {}/{}",
-                totalUrlsDiscovered, totalArticlesScraped, successfulSources, NewsSource.values().length);
+        if (failedSources.isEmpty()) {
+            log.info("🎯 Full scraping completed - URLs: {}, Articles: {}, All sources successful: {}/{}",
+                    totalUrlsDiscovered, totalArticlesScraped, successfulSources, NewsSource.values().length);
+        } else {
+            log.info("🎯 Full scraping completed - URLs: {}, Articles: {}, Successful sources: {}/{}, Failed: {}",
+                    totalUrlsDiscovered, totalArticlesScraped, successfulSources, NewsSource.values().length, failedSources);
+        }
 
         return ResponseEntity.ok(overallResponse);
     }
