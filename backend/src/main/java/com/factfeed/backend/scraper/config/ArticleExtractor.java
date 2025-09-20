@@ -447,6 +447,7 @@ public class ArticleExtractor {
                 .replace("&amp;", "&")
                 .replace("&quot;", "\"")
                 .replace("&#39;", "'")
+                .replace("&#039;", "'")  // Additional single quote escape sequence
                 .replace("&ndash;", "–")
                 .replaceAll("<[^>]*>", "") // Remove HTML tags
                 .replaceAll("\\s+", " ")
