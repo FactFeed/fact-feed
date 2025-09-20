@@ -57,4 +57,12 @@ public interface EventRepository extends JpaRepository<Event, Long> {
     // Find events by type and date range for merge analysis
     @Query("SELECT e FROM Event e WHERE e.eventType = :eventType AND e.createdAt >= :since AND e.isProcessed = false ORDER BY e.createdAt DESC")
     List<Event> findUnprocessedEventsByTypeAndDate(@Param("eventType") String eventType, @Param("since") LocalDateTime since);
+
+    // New methods for improved frontend support
+    List<Event> findByIsProcessedOrderByEventDateDesc(Boolean isProcessed);
+
+    List<Event> findByIsProcessedAndIdLessThanOrderByEventDateDesc(Boolean isProcessed, Long id);
+
+    List<Event> findByIsProcessedAndEventDateBetweenOrderByEventDateDesc(
+            Boolean isProcessed, LocalDateTime startDate, LocalDateTime endDate);
 }

@@ -225,6 +225,143 @@ public class FrontendController {
     }
 
     /**
+     * Get recent events with infinite scroll support
+     */
+    @GetMapping("/events/recent")
+    public ResponseEntity<Map<String, Object>> getRecentEvents(
+            @RequestParam(defaultValue = "0") int page,
+            @RequestParam(defaultValue = "15") int size,
+            @RequestParam(required = false) Long lastEventId) {
+
+        try {
+            List<Event> allEvents = lastEventId != null ?
+                    eventRepository.findByIsProcessedAndIdLessThanOrderByEventDateDesc(true, lastEventId) :
+                    eventRepository.findByIsProcessedOrderByEventDateDesc(true);
+
+            int start = page * size;
+            int end = Math.min(start + size, allEvents.size());
+
+            List<Event> pagedEvents = start >= allEvents.size() ?
+                    List.of() : allEvents.subList(start, end);
+
+            List<EventDisplayDto> eventDisplays = pagedEvents.stream()
+                    .map(this::convertToDetailedDisplayDto) // Include articles for better UX
+                    .collect(Collectors.toList());
+
+            Long nextEventId = eventDisplays.isEmpty() ? null :
+                    eventDisplays.get(eventDisplays.size() - 1).getId();
+
+            return ResponseEntity.ok(Map.of(
+                    "events", eventDisplays,
+                    "hasMore", end < allEvents.size(),
+                    "nextEventId", nextEventId != null ? nextEventId : 0,
+                    "totalCount", allEvents.size()
+            ));
+
+        } catch (Exception e) {
+            log.error("❌ Error fetching recent events: {}", e.getMessage());
+            return ResponseEntity.badRequest().body(Map.of(
+                    "error", "Failed to fetch recent events",
+                    "message", e.getMessage()
+            ));
+        }
+    }
+
+    /**
+     * Get events by date range with better filtering
+     */
+    @GetMapping("/events/by-date")
+    public ResponseEntity<Map<String, Object>> getEventsByDate(
+            @RequestParam String dateFrom,
+            @RequestParam String dateTo,
+            @RequestParam(defaultValue = "0") int page,
+            @RequestParam(defaultValue = "15") int size) {
+
+        try {
+            LocalDateTime from = LocalDateTime.parse(dateFrom + "T00:00:00");
+            LocalDateTime to = LocalDateTime.parse(dateTo + "T23:59:59");
+
+            List<Event> events = eventRepository.findByIsProcessedAndEventDateBetweenOrderByEventDateDesc(
+                    true, from, to);
+
+            int start = page * size;
+            int end = Math.min(start + size, events.size());
+
+            List<Event> pagedEvents = start >= events.size() ?
+                    List.of() : events.subList(start, end);
+
+            List<EventDisplayDto> eventDisplays = pagedEvents.stream()
+                    .map(this::convertToDetailedDisplayDto)
+                    .collect(Collectors.toList());
+
+            return ResponseEntity.ok(Map.of(
+                    "events", eventDisplays,
+                    "currentPage", page,
+                    "totalPages", (events.size() + size - 1) / size,
+                    "totalElements", events.size(),
+                    "hasMore", end < events.size()
+            ));
+
+        } catch (Exception e) {
+            log.error("❌ Error fetching events by date: {}", e.getMessage());
+            return ResponseEntity.badRequest().body(Map.of(
+                    "error", "Failed to fetch events by date",
+                    "message", e.getMessage()
+            ));
+        }
+    }
+
+    /**
+     * Search events with better text matching
+     */
+    @GetMapping("/events/search")
+    public ResponseEntity<Map<String, Object>> searchEvents(
+            @RequestParam String query,
+            @RequestParam(defaultValue = "0") int page,
+            @RequestParam(defaultValue = "15") int size) {
+
+        try {
+            String searchQuery = query.toLowerCase().trim();
+
+            List<Event> allEvents = eventRepository.findByIsProcessed(true)
+                    .stream()
+                    .filter(event ->
+                            event.getTitle().toLowerCase().contains(searchQuery) ||
+                                    (event.getAggregatedSummary() != null &&
+                                            event.getAggregatedSummary().toLowerCase().contains(searchQuery)) ||
+                                    event.getEventType().toLowerCase().contains(searchQuery))
+                    .sorted((e1, e2) -> e2.getEventDate().compareTo(e1.getEventDate()))
+                    .collect(Collectors.toList());
+
+            int start = page * size;
+            int end = Math.min(start + size, allEvents.size());
+
+            List<Event> pagedEvents = start >= allEvents.size() ?
+                    List.of() : allEvents.subList(start, end);
+
+            List<EventDisplayDto> eventDisplays = pagedEvents.stream()
+                    .map(this::convertToDetailedDisplayDto)
+                    .collect(Collectors.toList());
+
+            return ResponseEntity.ok(Map.of(
+                    "events", eventDisplays,
+                    "currentPage", page,
+                    "totalPages", (allEvents.size() + size - 1) / size,
+                    "totalElements", allEvents.size(),
+                    "hasMore", end < allEvents.size(),
+                    "query", query
+            ));
+
+        } catch (Exception e) {
+            log.error("❌ Error searching events: {}", e.getMessage());
+            return ResponseEntity.badRequest().body(Map.of(
+                    "error", "Failed to search events",
+                    "message", e.getMessage()
+            ));
+        }
+    }
+
+    /**
      * Get summary statistics for frontend dashboard
      */
     @GetMapping("/dashboard/stats")
