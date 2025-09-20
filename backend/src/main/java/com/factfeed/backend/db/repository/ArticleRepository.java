@@ -15,4 +15,11 @@ public interface ArticleRepository extends JpaRepository<Article, Long> {
 
     @Query("SELECT a.url FROM Article a WHERE a.url IN :urls")
     List<String> findExistingUrls(@Param("urls") List<String> urls);
+
+    // Summarization queries
+    @Query("SELECT a FROM Article a WHERE a.summarizedContent IS NULL OR a.summarizedContent = ''")
+    List<Article> findUnsummarizedArticles();
+
+    @Query("SELECT COUNT(a) FROM Article a WHERE a.summarizedContent IS NOT NULL AND a.summarizedContent != ''")
+    Long countSummarizedArticles();
 }
