@@ -10,7 +10,7 @@ description = "backend"
 
 java {
     toolchain {
-        languageVersion = JavaLanguageVersion.of(23)
+        languageVersion = JavaLanguageVersion.of(21)
     }
 }
 
