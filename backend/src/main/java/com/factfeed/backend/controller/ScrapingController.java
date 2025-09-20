@@ -125,7 +125,7 @@ public class ScrapingController {
                 // Track results
                 totalUrlsDiscovered += discoveredUrls.size();
                 totalArticlesScraped += scrapedArticles.size();
-                
+
                 boolean isSuccessful = scrapedArticles.size() > 0;
                 if (isSuccessful) {
                     successfulSources++;

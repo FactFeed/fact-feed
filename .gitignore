@@ -1,3 +1,13 @@
 node_modules/
 dist/
 build/
+# IDE specific files
+.vscode/
+.idea/
+.DS_Store
+.env
+.env.local
+.env.*.local
+# Logs
+logs
+*.log

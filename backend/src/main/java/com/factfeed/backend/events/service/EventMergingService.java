@@ -3,7 +3,6 @@ package com.factfeed.backend.events.service;
 import com.factfeed.backend.ai.entity.ApiUsageLog;
 import com.factfeed.backend.ai.repository.ApiUsageLogRepository;
 import com.factfeed.backend.ai.service.ApiUsageMonitoringService;
-import com.factfeed.backend.db.entity.Article;
 import com.factfeed.backend.events.dto.EventForMergeAnalysis;
 import com.factfeed.backend.events.dto.EventMergeCandidate;
 import com.factfeed.backend.events.entity.ArticleEventMapping;
@@ -111,7 +110,7 @@ public class EventMergingService {
     public String mergeRecentEvents(int hoursBack) {
         LocalDateTime since = LocalDateTime.now().minusHours(hoursBack);
         List<Event> recentEvents = eventRepository.findByCreatedAtAfterAndIsProcessed(since, false);
-        
+
         log.info("🔍 Found {} recent unprocessed events for merge analysis", recentEvents.size());
 
         if (recentEvents.size() < 2) {
@@ -177,11 +176,11 @@ public class EventMergingService {
     public Map<String, Object> getMergeStats() {
         LocalDateTime since24h = LocalDateTime.now().minusHours(24);
         LocalDateTime since7d = LocalDateTime.now().minusDays(7);
-        
+
         Long recentUnprocessedEvents = eventRepository.countByCreatedAtAfterAndIsProcessed(since24h, false);
         Long weeklyUnprocessedEvents = eventRepository.countByCreatedAtAfterAndIsProcessed(since7d, false);
         Long totalUnprocessedEvents = eventRepository.countByIsProcessed(false);
-        
+
         return Map.of(
                 "recentUnprocessedEvents24h", recentUnprocessedEvents != null ? recentUnprocessedEvents : 0,
                 "weeklyUnprocessedEvents", weeklyUnprocessedEvents != null ? weeklyUnprocessedEvents : 0,
@@ -288,7 +287,7 @@ public class EventMergingService {
                 mergeEventsIntoPrimary(primaryEvent, eventsToMerge, candidate);
                 mergedEventCount += eventsToMerge.size();
 
-                log.info("✅ Successfully merged {} events into '{}'", 
+                log.info("✅ Successfully merged {} events into '{}'",
                         eventsToMerge.size() + 1, primaryEvent.getTitle());
 
             } catch (Exception e) {
@@ -303,7 +302,7 @@ public class EventMergingService {
         // Update primary event with merged information
         primaryEvent.setTitle(candidate.getMergedTitle());
         primaryEvent.setEventType(candidate.getMergedEventType());
-        
+
         // Calculate new article count and confidence
         int totalArticles = primaryEvent.getArticleCount();
         double totalConfidence = primaryEvent.getConfidenceScore() * primaryEvent.getArticleCount();

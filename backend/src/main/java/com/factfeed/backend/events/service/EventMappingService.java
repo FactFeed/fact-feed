@@ -312,7 +312,7 @@ public class EventMappingService {
 
         if (!unclusteredIds.isEmpty()) {
             log.info("📝 Found {} unclustered articles, creating individual events", unclusteredIds.size());
-            
+
             for (Long articleId : unclusteredIds) {
                 Article article = articleMap.get(articleId);
                 if (article != null) {
@@ -322,13 +322,13 @@ public class EventMappingService {
                             .eventType("বিবিধ")
                             .confidenceScore(0.5) // Lower confidence for individual events
                             .articleCount(1)
-                            .eventDate(article.getArticlePublishedAt() != null ? 
-                                      article.getArticlePublishedAt() : LocalDateTime.now())
+                            .eventDate(article.getArticlePublishedAt() != null ?
+                                    article.getArticlePublishedAt() : LocalDateTime.now())
                             .isProcessed(false)
                             .build();
-                    
+
                     Event savedIndividualEvent = eventRepository.save(individualEvent);
-                    
+
                     // Create mapping
                     ArticleEventMapping individualMapping = ArticleEventMapping.builder()
                             .article(article)
@@ -336,16 +336,16 @@ public class EventMappingService {
                             .confidenceScore(0.5)
                             .mappingMethod("AI_INDIVIDUAL")
                             .build();
-                    
+
                     mappingRepository.save(individualMapping);
                     createdEvents.add(savedIndividualEvent);
-                    
+
                     log.debug("📄 Created individual event for article: {}", article.getTitle().substring(0, Math.min(30, article.getTitle().length())));
                 }
             }
         }
 
-        log.info("📊 Clustering Summary: {} clustered events, {} individual events, {} total articles processed", 
+        log.info("📊 Clustering Summary: {} clustered events, {} individual events, {} total articles processed",
                 createdEvents.size() - unclusteredIds.size(), unclusteredIds.size(), articles.size());
 
         return createdEvents;

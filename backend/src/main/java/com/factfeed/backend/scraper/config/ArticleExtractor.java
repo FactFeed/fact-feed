@@ -651,11 +651,11 @@ public class ArticleExtractor {
             for (Element paragraph : paragraphs) {
                 String text = paragraph.text().trim();
                 // Skip empty paragraphs and ad-related content
-                if (!text.isEmpty() && 
-                    !text.toLowerCase().contains("googletag") && 
-                    !text.toLowerCase().contains("advertisement") &&
-                    !text.toLowerCase().contains("div-gpt-ad") &&
-                    text.length() > 10) { // Skip very short paragraphs that might be ads/metadata
+                if (!text.isEmpty() &&
+                        !text.toLowerCase().contains("googletag") &&
+                        !text.toLowerCase().contains("advertisement") &&
+                        !text.toLowerCase().contains("div-gpt-ad") &&
+                        text.length() > 10) { // Skip very short paragraphs that might be ads/metadata
                     content.append(text).append("\n\n");
                     validParagraphs++;
                 }
@@ -713,12 +713,12 @@ public class ArticleExtractor {
             for (Element paragraph : paragraphs) {
                 String text = paragraph.text().trim();
                 // Skip empty paragraphs and ad-related content
-                if (!text.isEmpty() && 
-                    !text.toLowerCase().contains("googletag") && 
-                    !text.toLowerCase().contains("advertisement") &&
-                    !text.toLowerCase().contains("div-gpt-ad") &&
-                    !text.toLowerCase().contains("loadajaxdetail") &&
-                    text.length() > 10) { // Skip very short paragraphs that might be ads/metadata
+                if (!text.isEmpty() &&
+                        !text.toLowerCase().contains("googletag") &&
+                        !text.toLowerCase().contains("advertisement") &&
+                        !text.toLowerCase().contains("div-gpt-ad") &&
+                        !text.toLowerCase().contains("loadajaxdetail") &&
+                        text.length() > 10) { // Skip very short paragraphs that might be ads/metadata
                     content.append(text).append("\n\n");
                     validParagraphs++;
                 }

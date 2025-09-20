@@ -103,7 +103,7 @@ public class AggregationService {
 
         for (Event event : unprocessedEvents) {
             try {
-                log.info("🔄 Processing event: {} (ID: {}, Articles: {})", 
+                log.info("🔄 Processing event: {} (ID: {}, Articles: {})",
                         event.getTitle(), event.getId(), event.getArticleCount());
 
                 // Handle single-article events differently
@@ -139,18 +139,18 @@ public class AggregationService {
     @Transactional
     public void processSingleArticleEvent(Event event) {
         List<Article> articles = mappingRepository.findArticlesByEvent(event);
-        
+
         if (articles.size() == 1) {
             Article article = articles.get(0);
-            
+
             // Use the article's summarized content as aggregated summary
-            event.setAggregatedSummary("একক সংবাদ: " + 
-                (article.getSummarizedContent() != null ? article.getSummarizedContent() : article.getTitle()));
+            event.setAggregatedSummary("একক সংবাদ: " +
+                    (article.getSummarizedContent() != null ? article.getSummarizedContent() : article.getTitle()));
             event.setDiscrepancies("কোনো উল্লেখযোগ্য তথ্যগত বিভেদ পাওয়া যায়নি (একক সংবাদ)");
             event.setConfidenceScore(0.8); // Good confidence for single article
             event.setIsProcessed(true);
             event.setUpdatedAt(LocalDateTime.now());
-            
+
             eventRepository.save(event);
             log.debug("💾 Updated single-article event {} with basic aggregation", event.getId());
         }

@@ -15,7 +15,7 @@ public interface ArticleEventMappingRepository extends JpaRepository<ArticleEven
 
     // Find mappings by event
     List<ArticleEventMapping> findByEventOrderByConfidenceScoreDesc(Event event);
-    
+
     // Find mappings by event (for merging operations)
     List<ArticleEventMapping> findByEvent(Event event);
 
