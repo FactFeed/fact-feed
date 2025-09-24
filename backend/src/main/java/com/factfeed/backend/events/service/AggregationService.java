@@ -72,18 +72,24 @@ public class AggregationService {
     private final AtomicInteger keyIndex = new AtomicInteger(0);
 
     // API keys for rotation
-    @Value("${secret.api.key1}")
+    @Value("${GEMINI_KEY_Z1}")
     private String apiKey1;
-    @Value("${secret.api.key2}")
+
+    @Value("${GEMINI_KEY_Z2}")
     private String apiKey2;
-    @Value("${secret.api.key3}")
+
+    @Value("${GEMINI_KEY_Z3}")
     private String apiKey3;
-    @Value("${secret.api.key4}")
+
+    @Value("${GEMINI_KEY_Z4}")
     private String apiKey4;
-    @Value("${secret.api.key5}")
+
+    @Value("${GEMINI_KEY_C5}")
     private String apiKey5;
-    @Value("${secret.api.key6}")
+
+    @Value("${GEMINI_KEY_C1}")
     private String apiKey6;
+
 
     /**
      * Process all unprocessed events for aggregation
